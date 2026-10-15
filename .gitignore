@@ -1,0 +1,11 @@
+# Dados pessoais (cada pessoa tem o seu, criado automaticamente)
+gastos.json
+gastos-corrompido-*.json
+*.json.tmp
+lancamentos*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
