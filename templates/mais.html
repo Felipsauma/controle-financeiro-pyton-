@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block topo %}
+  <a class="voltar" href="{{ url_for('inicio') }}">‹ Início</a>
+  <h1>Mais</h1>
+  <span class="espaco"></span>
+{% endblock %}
+
+{% block conteudo %}
+  <nav class="cartao menu">
+    <a class="linha" href="{{ url_for('orcamentos') }}">
+      <span class="linha-texto">Orçamentos<span class="categoria">Limite mensal por categoria</span></span>
+    </a>
+    <a class="linha" href="{{ url_for('recorrentes') }}">
+      <span class="linha-texto">Lançamentos recorrentes
+        <span class="categoria">{{ recorrentes }} se repetindo todo mês</span></span>
+    </a>
+    <a class="linha" href="{{ url_for('categorias') }}">
+      <span class="linha-texto">Categorias<span class="categoria">Criar ou remover</span></span>
+    </a>
+    <a class="linha" href="{{ url_for('exportar', mes='todos') }}">
+      <span class="linha-texto">Exportar tudo para o Excel<span class="categoria">Arquivo CSV</span></span>
+    </a>
+  </nav>
+
+  <section class="cartao">
+    <div class="cabecalho-cartao"><h2>Resumo por mês</h2></div>
+    {% if meses %}
+      <table>
+        <tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr>
+        {% for m in meses %}
+          <tr>
+            <td><a href="{{ url_for('inicio', mes=m.mes) }}">{{ formatar_mes_curto(m.mes) }}</a></td>
+            <td class="receita">{{ formatar_reais(m.receita) }}</td>
+            <td class="despesa">{{ formatar_reais(m.despesa) }}</td>
+            <td{{ ' class=negativo' if m.saldo < 0 }}>{{ formatar_saldo(m.saldo) }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="vazio">Nenhum lançamento ainda.</p>
+    {% endif %}
+  </section>
+
+  <form method="post" action="{{ url_for('sair') }}">
+    <button class="botao secundario" type="submit">Sair (pedir a senha de novo)</button>
+  </form>
+{% endblock %}

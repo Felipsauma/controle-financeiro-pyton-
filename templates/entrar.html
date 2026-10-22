@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+  <div class="entrar">
+    <img src="{{ url_for('icone') }}" alt="">
+    <h1>Controle de Gastos</h1>
+    <p class="suave">Digite a senha que você criou ao abrir o programa no computador.</p>
+    <form class="cartao" method="post">
+      {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+      <label class="campo">Senha
+        <input type="password" name="senha" autocomplete="current-password" required autofocus>
+      </label>
+      <button class="botao" type="submit">Entrar</button>
+    </form>
+  </div>
+{% endblock %}

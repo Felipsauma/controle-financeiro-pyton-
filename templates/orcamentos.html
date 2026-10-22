@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block topo %}
+  <a class="voltar" href="{{ url_for('inicio') }}">‹ Início</a>
+  <h1>Orçamentos</h1>
+  <span class="espaco"></span>
+{% endblock %}
+
+{% block conteudo %}
+  {% if erros %}<div class="aviso aviso-erro" role="alert">Confira os valores marcados abaixo.</div>{% endif %}
+  <form class="cartao" method="post">
+    <p class="suave pequeno" style="margin-top: 0">
+      Quanto você quer gastar no máximo, por mês, em cada categoria.
+      Deixe vazio para não ter limite. A barra fica laranja a partir de 80% e vermelha quando estoura.
+    </p>
+    {% for categoria, texto in campos.items() %}
+      <label class="campo">{{ categoria }}
+        <input name="{{ categoria }}" value="{{ texto }}" inputmode="decimal" placeholder="Sem limite"
+               autocomplete="off">
+        {% if categoria in erros %}<span class="erro-campo">{{ erros[categoria] }}</span>{% endif %}
+      </label>
+    {% endfor %}
+    <button class="botao" type="submit">Salvar orçamentos</button>
+  </form>
+{% endblock %}

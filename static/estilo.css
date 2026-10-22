@@ -1,0 +1,387 @@
+/* Controle de Gastos - versão para o navegador.
+   As mesmas cores da versão com janela, com um tema escuro para quando o
+   celular está no modo escuro. */
+
+:root {
+  --fundo: #f3f5f9;
+  --cartao: #ffffff;
+  --borda: #e3e7ee;
+  --trilho: #eef1f5;
+  --texto: #1f2937;
+  --suave: #6b7280;
+  --acento: #10a37f;        /* verde principal (também é a cor das receitas) */
+  --acento-escuro: #0c8a6b;
+  --acento-claro: #e6f6f1;
+  --perigo: #dc2626;        /* vermelho (cor das despesas) */
+  --perigo-claro: #fdecec;
+  --alerta: #d97706;        /* laranja: orçamento quase no limite */
+  --alerta-claro: #fdf3e3;
+  --info-claro: #eaf1fe;
+  --info: #2563eb;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #0f1216;
+    --cartao: #1a1f26;
+    --borda: #2a313b;
+    --trilho: #262c35;
+    --texto: #e5e7eb;
+    --suave: #9aa3af;
+    --acento: #22c493;
+    --acento-escuro: #3dd6a6;
+    --acento-claro: #12352b;
+    --perigo: #f87171;
+    --perigo-claro: #3a1c1c;
+    --alerta: #f59e0b;
+    --alerta-claro: #3a2a10;
+    --info-claro: #172544;
+    --info: #7aa7ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent;
+}
+
+body:has(.acoes) { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+main { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+a { color: var(--acento-escuro); text-decoration: none; }
+
+h2 { font-size: 17px; margin: 0; }
+
+.suave { color: var(--suave); }
+.pequeno { font-size: 14px; }
+.negativo { color: var(--perigo); }
+.receita { color: var(--acento); }
+.despesa { color: var(--perigo); }
+
+/* ---------------- Cabeçalho ---------------- */
+
+.topo {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 12px 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topo h1 { flex: 1; margin: 0; font-size: 20px; text-align: center; }
+
+.seta, .voltar, .espaco {
+  min-width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 28px;
+  color: var(--texto);
+}
+
+.voltar { font-size: 16px; color: var(--acento-escuro); justify-content: flex-start; min-width: 72px; }
+.espaco { min-width: 72px; }
+.seta:active { background: var(--trilho); }
+
+.periodo { text-align: center; margin: -4px 0 12px; font-size: 14px; }
+
+/* ---------------- Cartões ---------------- */
+
+.cartao {
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.cabecalho-cartao {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cabecalho-cartao a { font-size: 15px; }
+
+.rotulo { font-size: 13px; color: var(--suave); }
+
+.grande { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; margin: 2px 0; }
+
+.resumo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--borda);
+}
+
+.resumo .valor-resumo { font-size: 18px; font-weight: 600; }
+
+.vazio { color: var(--suave); text-align: center; margin: 20px 0; }
+
+/* ---------------- Avisos ---------------- */
+
+.aviso {
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  background: var(--info-claro);
+  color: var(--texto);
+  border-left: 4px solid var(--info);
+}
+
+.aviso-ok { background: var(--acento-claro); border-color: var(--acento); }
+.aviso-aviso { background: var(--alerta-claro); border-color: var(--alerta); }
+.aviso-erro { background: var(--perigo-claro); border-color: var(--perigo); }
+
+/* ---------------- Barras de categoria ---------------- */
+
+.barra { margin-bottom: 14px; }
+.barra:last-child { margin-bottom: 0; }
+
+.barra-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.barra-linha span { color: var(--suave); font-size: 13px; text-align: right; }
+.barra.alerta .barra-linha span { color: var(--alerta); }
+.barra.estourado .barra-linha span { color: var(--perigo); }
+
+.trilho { height: 10px; border-radius: 5px; background: var(--trilho); overflow: hidden; }
+.preenchido { height: 100%; border-radius: 5px; background: var(--cor); min-width: 2px; }
+.barra.alerta .preenchido { background: var(--alerta); }
+.barra.estourado .preenchido { background: var(--perigo); }
+
+/* ---------------- Gráfico dos últimos meses ---------------- */
+
+.legenda { display: flex; gap: 16px; font-size: 13px; color: var(--suave); margin: 4px 0 12px; }
+.ponto { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.ponto.receita { background: var(--acento); }
+.ponto.despesa { background: var(--perigo); }
+
+.grafico { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+
+.coluna { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--suave); }
+
+.barras {
+  height: 120px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 3px;
+  border-bottom: 1px solid var(--borda);
+}
+
+.barras .b { width: 30%; max-width: 18px; border-radius: 4px 4px 0 0; }
+.barras .b.receita { background: var(--acento); }
+.barras .b.despesa { background: var(--perigo); }
+
+.rotulo-mes { font-size: 12px; }
+.coluna.destaque .rotulo-mes { color: var(--texto); font-weight: 700; }
+
+/* ---------------- Lista de lançamentos ---------------- */
+
+.busca input { margin-bottom: 4px; }
+
+.dia {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--suave);
+  margin: 14px 0 2px;
+}
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borda);
+  color: var(--texto);
+}
+
+.item:last-child { border-bottom: 0; }
+.item:active { opacity: 0.6; }
+
+.item-texto { display: flex; flex-direction: column; min-width: 0; }
+.descricao { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.categoria { font-size: 13px; color: var(--suave); }
+.valor { font-weight: 600; white-space: nowrap; }
+
+.item.futuro .descricao, .item.futuro .valor { color: var(--suave); }
+
+/* ---------------- Barra de ações (fica presa embaixo) ---------------- */
+
+.acoes {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--fundo) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--borda);
+}
+
+.acoes .botao { flex: 1; }
+.acoes .botao.secundario { flex: 0 0 56px; }
+
+/* ---------------- Botões e formulários ---------------- */
+
+.botao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--acento);
+  cursor: pointer;
+}
+
+.botao:active { filter: brightness(0.9); }
+.botao.despesa, .botao.perigo { background: var(--perigo); color: #fff; }
+.botao.receita { background: var(--acento); color: #fff; }
+.botao.secundario { background: var(--cartao); color: var(--texto); border: 1px solid var(--borda); }
+
+.botao-texto {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  color: var(--perigo);
+  padding: 8px 0 8px 12px;
+  cursor: pointer;
+}
+
+.campo { display: block; font-size: 14px; color: var(--suave); margin-bottom: 14px; }
+
+input[type="text"], input[type="search"], input[type="password"], input[type="date"],
+input:not([type]), select {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  background: var(--fundo);
+  color: var(--texto);
+  font: inherit;
+  font-size: 17px;          /* 16px ou mais: o iPhone não dá zoom ao tocar no campo */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--suave) 50%),
+                    linear-gradient(135deg, var(--suave) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+input:focus, select:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+
+.valor-grande { font-size: 28px !important; font-weight: 700; }
+
+.erro-campo { color: var(--perigo); font-size: 13px; margin-top: 4px; display: block; }
+
+.opcao { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px; font-size: 16px; }
+.opcao input { width: 22px; height: 22px; accent-color: var(--acento); margin: 0; }
+
+/* Despesa / Receita: dois botões lado a lado (são radios disfarçados) */
+.tipos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--trilho);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
+.tipos input { position: absolute; opacity: 0; pointer-events: none; }
+
+.tipos label {
+  text-align: center;
+  padding: 10px;
+  border-radius: 9px;
+  font-weight: 600;
+  color: var(--suave);
+  cursor: pointer;
+}
+
+#tipo-despesa:checked + label { background: var(--cartao); color: var(--perigo); }
+#tipo-receita:checked + label { background: var(--cartao); color: var(--acento); }
+
+/* Cada tipo tem suas categorias: mostra só a lista do tipo escolhido */
+.formulario:has(#tipo-receita:checked) .so-despesa,
+.formulario:has(#tipo-despesa:checked) .so-receita { display: none; }
+
+/* ---------------- Listas simples (categorias, recorrentes, menu) ---------------- */
+
+.linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--borda);
+  color: var(--texto);
+}
+
+.linha:last-child { border-bottom: 0; }
+.linha form { margin: 0; }
+.linha-texto { display: flex; flex-direction: column; padding: 8px 0; min-width: 0; }
+
+.menu .linha::after { content: "›"; color: var(--suave); font-size: 22px; }
+
+.adicionar { display: flex; gap: 8px; margin-top: 12px; }
+.adicionar input { margin: 0; }
+.adicionar .botao { width: auto; flex: 0 0 auto; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: right; color: var(--suave); font-weight: 500; padding: 6px 0; }
+td { text-align: right; padding: 8px 0; border-top: 1px solid var(--borda); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td a { color: var(--texto); font-weight: 600; }
+
+/* ---------------- Tela de senha ---------------- */
+
+.entrar { margin-top: 18vh; text-align: center; }
+.entrar img { width: 72px; height: 72px; border-radius: 18px; }
+.entrar h1 { font-size: 24px; margin: 12px 0 4px; }
+.entrar form { text-align: left; margin-top: 24px; }

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block topo %}
+  <a class="voltar" href="{{ url_for('mais') }}">‹ Mais</a>
+  <h1>Recorrentes</h1>
+  <span class="espaco"></span>
+{% endblock %}
+
+{% block conteudo %}
+  <section class="cartao">
+    <p class="suave pequeno" style="margin-top: 0">
+      Estes lançamentos são criados sozinhos todo mês. Para criar um novo, marque
+      "Repetir todo mês" ao adicionar um lançamento.
+    </p>
+    {% for r in recorrentes %}
+      <div class="linha">
+        <span class="linha-texto">
+          <span class="descricao">{{ r.descricao }}</span>
+          <span class="categoria">
+            <span class="{{ r.tipo }}">{{ "+" if r.tipo == "receita" else "−" }} {{ formatar_reais(r.valor) }}</span>
+            · {{ r.categoria }} · todo dia {{ r.dia }}
+          </span>
+        </span>
+        <form method="post" action="{{ url_for('parar', identificador=r.id) }}"
+              onsubmit="return confirm('Parar de repetir este lançamento? Os que já foram criados continuam na lista.')">
+          <button class="botao-texto" type="submit">Parar</button>
+        </form>
+      </div>
+    {% else %}
+      <p class="vazio">Nenhum lançamento se repete todo mês.</p>
+    {% endfor %}
+  </section>
+{% endblock %}

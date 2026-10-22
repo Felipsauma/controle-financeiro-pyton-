@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set editando = indice is not none %}
+
+{% block titulo %}{{ "Editar lançamento" if editando else "Novo lançamento" }}{% endblock %}
+
+{% block topo %}
+  <a class="voltar" href="{{ url_for('inicio', mes=voltar or none) }}">‹ Voltar</a>
+  <h1>{{ "Editar" if editando else "Novo lançamento" }}</h1>
+  <span class="espaco"></span>
+{% endblock %}
+
+{% block conteudo %}
+  {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+
+  <form class="cartao formulario" method="post"
+        action="{{ url_for('salvar_edicao', indice=indice) if editando else url_for('criar') }}">
+    <input type="hidden" name="c" value="{{ chave or '' }}">
+    <input type="hidden" name="voltar" value="{{ voltar }}">
+
+    <div class="tipos">
+      <input type="radio" name="tipo" value="despesa" id="tipo-despesa"{{ " checked" if campos.tipo == "despesa" }}>
+      <label for="tipo-despesa">Despesa</label>
+      <input type="radio" name="tipo" value="receita" id="tipo-receita"{{ " checked" if campos.tipo == "receita" }}>
+      <label for="tipo-receita">Receita</label>
+    </div>
+
+    <label class="campo">Valor (R$)
+      <input class="valor-grande" name="valor" value="{{ campos.valor }}" inputmode="decimal"
+             placeholder="0,00" autocomplete="off" required{{ " autofocus" if not editando }}>
+    </label>
+
+    <label class="campo">Descrição
+      <input name="descricao" value="{{ campos.descricao }}" placeholder="Ex: Almoço" maxlength="80">
+    </label>
+
+    {% for tipo in ["despesa", "receita"] %}
+      <label class="campo so-{{ tipo }}">Categoria
+        <select name="categoria_{{ tipo }}">
+          {% for c in categorias[tipo] %}
+            <option{{ " selected" if campos.tipo == tipo and c == campos.categoria }}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endfor %}
+
+    <label class="campo">Data
+      <input type="date" name="data" value="{{ campos.data }}">
+    </label>
+
+    {% if not editando %}
+      <label class="opcao"><input type="checkbox" name="repetir"{{ " checked" if campos.repetir }}> Repetir todo mês</label>
+    {% elif recorrente %}
+      <label class="opcao"><input type="checkbox" name="proximos"> Aplicar as mudanças também aos próximos meses</label>
+    {% endif %}
+
+    <button class="botao" type="submit">Salvar</button>
+  </form>
+
+  {% if editando %}
+    <form class="cartao" method="post" action="{{ url_for('remover', indice=indice) }}"
+          onsubmit="return confirm('Remover este lançamento?')">
+      <input type="hidden" name="c" value="{{ chave }}">
+      <input type="hidden" name="voltar" value="{{ voltar }}">
+      {% if recorrente %}
+        <label class="opcao"><input type="checkbox" name="parar"> Parar de criá-lo nos próximos meses</label>
+      {% endif %}
+      <button class="botao perigo" type="submit">Remover lançamento</button>
+    </form>
+  {% endif %}
+{% endblock %}
