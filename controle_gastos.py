@@ -11,14 +11,19 @@ e são os mesmos da versão com janela (app_gastos.py).
 Como rodar:  python controle_gastos.py
 """
 
+from datetime import date
+
 from financas import (
     ARQUIVO,
+    DadosAlteradosPorFora,
     DadosCorrompidos,
+    adicionar_categoria,
+    atualizar_recorrente,
     calcular_saldo,
     carregar_dados,
     categorias_do_tipo,
     criar_recorrente,
-    dados_vazios,
+    eh_futuro,
     exportar_csv,
     filtrar,
     formatar_data,
@@ -28,6 +33,9 @@ from financas import (
     formatar_saldo,
     gerar_recorrentes,
     mes_atual,
+    parar_recorrente,
+    recorrente_do_lancamento,
+    remover_categoria,
     salvar_dados,
     situacao_orcamento,
     totais_por_categoria,
@@ -36,7 +44,6 @@ from financas import (
     validar_data,
     validar_mes,
     validar_valor,
-    CATEGORIAS_DESPESA,
 )
 
 
@@ -111,12 +118,12 @@ def confirmar(mensagem):
     return input(f"{mensagem} (s/N): ").strip().lower() == "s"
 
 
-def escolher_lancamento(dados, mensagem):
-    """Pede o número (#) de um lançamento. Retorna a posição na lista ou None."""
+def escolher_numero(quantidade, mensagem):
+    """Pede um número de 1 a 'quantidade'. Retorna a posição (0, 1, ...) ou None."""
     opcao = input(mensagem).strip()
-    if opcao.isdigit() and 1 <= int(opcao) <= len(dados["lancamentos"]):
+    if opcao.isdigit() and 1 <= int(opcao) <= quantidade:
         return int(opcao) - 1
-    print("Nenhum lançamento escolhido.")
+    print("Nada escolhido.")
     return None
 
 
@@ -129,14 +136,68 @@ def mostrar_lancamentos(itens):
     print("-" * 66)
     for indice, l in itens:
         sinal = "+" if l["tipo"] == "receita" else "-"
-        recorrente = " (todo mês)" if l.get("recorrente") else ""
+        observacao = " (todo mês)" if l.get("recorrente") else ""
+        if eh_futuro(l):
+            observacao += " (agendado)"
         print(f"{indice + 1:>3}  {formatar_data(l['data']):<10}  {l['categoria']:<13}  "
-              f"{sinal + ' ' + formatar_reais(l['valor']):>14}  {l['descricao']}{recorrente}")
+              f"{sinal + ' ' + formatar_reais(l['valor']):>14}  {l['descricao']}{observacao}")
     print("-" * 66)
     totais = totais_por_tipo([l for _, l in itens])
     print(f"Receitas: {formatar_reais(totais['receita'])}   "
           f"Despesas: {formatar_reais(totais['despesa'])}   "
           f"Saldo: {formatar_saldo(totais['receita'] - totais['despesa'])}")
+
+
+def texto_saldo(dados):
+    """'R$ 1.200,00', mais o saldo previsto quando há lançamentos agendados."""
+    saldo = calcular_saldo(dados["lancamentos"], ate=date.today())
+    previsto = calcular_saldo(dados["lancamentos"])
+    texto = formatar_saldo(saldo)
+    if previsto != saldo:
+        texto += f"  (previsto, com os agendados: {formatar_saldo(previsto)})"
+    return texto
+
+
+# ----------------------------------------------------------------------
+# Salvar e carregar
+# ----------------------------------------------------------------------
+
+def carregar():
+    """Carrega os dados e cria os lançamentos recorrentes que venceram."""
+    try:
+        dados = carregar_dados()
+    except DadosCorrompidos as erro:
+        dados = erro.dados
+        if erro.ignorados:
+            print(f"⚠ {erro.ignorados} item(ns) inválido(s) nos dados salvos foram ignorados. "
+                  f"O arquivo original foi copiado para '{erro.backup.name}'.")
+        else:
+            print(f"⚠ Não foi possível ler os dados salvos. O arquivo antigo foi guardado como "
+                  f"'{erro.backup.name}' e o programa começou com uma lista vazia.")
+
+    criados = gerar_recorrentes(dados)
+    if criados:
+        salvar(dados)
+        print(f"↻ {criados} lançamento(s) recorrente(s) adicionado(s) automaticamente.")
+    return dados
+
+
+def salvar(dados):
+    """Salva os dados. Se a versão com janela mexeu no arquivo enquanto este
+    programa estava aberto, pergunta qual das duas versões manter."""
+    try:
+        salvar_dados(dados)
+    except DadosAlteradosPorFora:
+        print("\n⚠ Os dados foram alterados por outro programa (a versão com janela está aberta?).")
+        if confirmar("Salvar mesmo assim e descartar as mudanças feitas lá?"):
+            salvar_dados(dados, forcar=True)
+            return
+        dados.clear()
+        dados.update(carregar())
+        print("Os dados foram recarregados do arquivo. A sua última alteração não foi salva.")
+        return
+    except OSError as erro:
+        print(f"⚠ Não foi possível salvar os dados: {erro}")
 
 
 # ----------------------------------------------------------------------
@@ -148,7 +209,7 @@ def adicionar_lancamento(dados):
     tipo = escolher_tipo()
     descricao = input("Descrição (ex: almoço, salário): ").strip() or "Sem descrição"
     valor = ler_valor("Valor (R$): ")
-    categoria = escolher_opcao(categorias_do_tipo(tipo), "Categoria (número): ")
+    categoria = escolher_opcao(categorias_do_tipo(dados, tipo), "Categoria (número): ")
     data = ler_data("Data (DD/MM/AAAA, Enter = hoje): ")
 
     lancamento = {"tipo": tipo, "descricao": descricao, "valor": valor,
@@ -156,7 +217,7 @@ def adicionar_lancamento(dados):
     dados["lancamentos"].append(lancamento)
     if confirmar("Repetir todo mês, no mesmo dia?"):
         criar_recorrente(dados, lancamento)
-    salvar_dados(dados)
+    salvar(dados)
     print(f"✔ {tipo.capitalize()} de {formatar_reais(valor)} registrada!")
 
 
@@ -165,7 +226,7 @@ def listar_lancamentos(dados):
     mes = ler_mes("Mês (MM/AAAA, Enter = mês atual, T = todos): ")
     print(formatar_mes(mes) if mes else "Todos os meses")
     mostrar_lancamentos(filtrar(dados["lancamentos"], mes=mes))
-    print(f"Saldo atual (tudo): {formatar_saldo(calcular_saldo(dados['lancamentos']))}")
+    print(f"Saldo atual (tudo até hoje): {texto_saldo(dados)}")
 
 
 def buscar_lancamentos(dados):
@@ -227,7 +288,8 @@ def editar_lancamento(dados):
     mostrar_lancamentos(filtrar(dados["lancamentos"]))
     if not dados["lancamentos"]:
         return
-    indice = escolher_lancamento(dados, "\nNúmero do lançamento para editar (Enter para cancelar): ")
+    indice = escolher_numero(len(dados["lancamentos"]),
+                             "\nNúmero do lançamento para editar (Enter para cancelar): ")
     if indice is None:
         return
 
@@ -238,12 +300,16 @@ def editar_lancamento(dados):
     valor = ler_valor(f"Valor [{formatar_numero(l['valor'])}]: ", atual=l["valor"])
     # Se o tipo mudou, a categoria antiga não serve mais
     categoria_atual = l["categoria"] if tipo == l["tipo"] else None
-    categoria = escolher_opcao(categorias_do_tipo(tipo), f"Categoria [{categoria_atual or 'escolha'}]: ",
-                               atual=categoria_atual)
+    categoria = escolher_opcao(categorias_do_tipo(dados, tipo),
+                               f"Categoria [{categoria_atual or 'escolha'}]: ", atual=categoria_atual)
     data = ler_data(f"Data [{formatar_data(l['data'])}]: ", atual=l["data"])
 
     l.update(tipo=tipo, descricao=descricao, valor=valor, categoria=categoria, data=data)
-    salvar_dados(dados)
+    recorrente = recorrente_do_lancamento(dados, l)
+    if recorrente and confirmar("Este lançamento se repete todo mês. Aplicar as mudanças "
+                                "também aos próximos meses?"):
+        atualizar_recorrente(recorrente, l)
+    salvar(dados)
     print("✔ Lançamento atualizado!")
 
 
@@ -252,11 +318,15 @@ def remover_lancamento(dados):
     mostrar_lancamentos(filtrar(dados["lancamentos"]))
     if not dados["lancamentos"]:
         return
-    indice = escolher_lancamento(dados, "\nNúmero do lançamento para remover (Enter para cancelar): ")
+    indice = escolher_numero(len(dados["lancamentos"]),
+                             "\nNúmero do lançamento para remover (Enter para cancelar): ")
     if indice is None:
         return
     removido = dados["lancamentos"].pop(indice)
-    salvar_dados(dados)
+    recorrente = recorrente_do_lancamento(dados, removido)
+    if recorrente and confirmar("Este lançamento se repete todo mês. Parar de criá-lo nos próximos meses?"):
+        parar_recorrente(dados, recorrente)
+    salvar(dados)
     print(f"✔ Removido: {removido['descricao']} ({formatar_reais(removido['valor'])})")
 
 
@@ -264,20 +334,75 @@ def definir_orcamentos(dados):
     print("\n=== Orçamentos mensais ===")
     print("Quanto você quer gastar, no máximo, por mês em cada categoria.")
     print("Enter mantém o valor atual, 0 tira o limite.")
-    for categoria in CATEGORIAS_DESPESA:
+    for categoria in categorias_do_tipo(dados, "despesa"):
         atual = dados["orcamentos"].get(categoria)
         texto = input(f"{categoria} [{formatar_numero(atual) if atual else 'sem limite'}]: ").strip()
         if texto == "":
             continue
-        if texto in ("0", "0,00"):
-            dados["orcamentos"].pop(categoria, None)
-            continue
         try:
-            dados["orcamentos"][categoria] = validar_valor(texto)
+            valor = validar_valor(texto, aceitar_zero=True)
         except ValueError as erro:
             print(f"  {erro} (mantido o valor anterior)")
-    salvar_dados(dados)
+            continue
+        if valor == 0:
+            dados["orcamentos"].pop(categoria, None)
+        else:
+            dados["orcamentos"][categoria] = valor
+    salvar(dados)
     print("✔ Orçamentos salvos!")
+
+
+def gerenciar_recorrentes(dados):
+    print("\n=== Lançamentos recorrentes ===")
+    recorrentes = dados["recorrentes"]
+    if not recorrentes:
+        print("Nenhum lançamento recorrente. Para criar um, responda 's' em "
+              "\"Repetir todo mês?\" ao adicionar um lançamento.")
+        return
+    for i, r in enumerate(recorrentes, start=1):
+        sinal = "+" if r["tipo"] == "receita" else "-"
+        print(f"{i:>3}. dia {r['dia']:>2}  {sinal} {formatar_reais(r['valor']):>13}  "
+              f"{r['descricao']} ({r['categoria']})")
+    indice = escolher_numero(len(recorrentes), "\nNúmero para parar de repetir (Enter para voltar): ")
+    if indice is None:
+        return
+    r = recorrentes[indice]
+    if confirmar(f"Parar de criar \"{r['descricao']}\" todo mês? Os que já foram criados continuam"):
+        parar_recorrente(dados, r)
+        salvar(dados)
+        print("✔ Não vai mais se repetir.")
+
+
+def gerenciar_categorias(dados):
+    print("\n=== Categorias ===")
+    tipo = escolher_tipo()
+    while True:
+        print(f"\nCategorias de {tipo}: {', '.join(categorias_do_tipo(dados, tipo))}")
+        print("1. Adicionar   2. Remover   0. Voltar")
+        opcao = input("Opção: ").strip()
+        try:
+            if opcao == "1":
+                nome = adicionar_categoria(dados, tipo, input("Nome da nova categoria: "))
+                print(f"✔ Categoria \"{nome}\" criada.")
+            elif opcao == "2":
+                lista = categorias_do_tipo(dados, tipo)
+                for i, categoria in enumerate(lista, start=1):
+                    print(f"  {i}. {categoria}")
+                indice = escolher_numero(len(lista), "Número da categoria (Enter para cancelar): ")
+                if indice is None:
+                    continue
+                nome = lista[indice]
+                remover_categoria(dados, tipo, nome)
+                print(f"✔ Categoria \"{nome}\" removida.")
+            elif opcao == "0" or opcao == "":
+                return
+            else:
+                print("Opção inválida.")
+                continue
+        except ValueError as erro:
+            print(f"  {erro}")
+            continue
+        salvar(dados)
 
 
 def exportar_lancamentos(dados):
@@ -301,22 +426,6 @@ def exportar_lancamentos(dados):
 # Programa principal
 # ----------------------------------------------------------------------
 
-def carregar():
-    """Carrega os dados e cria os lançamentos recorrentes que venceram."""
-    try:
-        dados = carregar_dados()
-    except DadosCorrompidos as erro:
-        print(f"⚠ Não foi possível ler os dados salvos. O arquivo antigo foi guardado como "
-              f"'{erro.backup.name}' e o programa começou com uma lista vazia.")
-        dados = dados_vazios()
-
-    criados = gerar_recorrentes(dados)
-    if criados:
-        salvar_dados(dados)
-        print(f"↻ {criados} lançamento(s) recorrente(s) adicionado(s) automaticamente.")
-    return dados
-
-
 def main():
     dados = carregar()
 
@@ -330,15 +439,17 @@ def main():
         "6": ("Editar lançamento", editar_lancamento),
         "7": ("Remover lançamento", remover_lancamento),
         "8": ("Orçamentos", definir_orcamentos),
-        "9": ("Exportar para Excel (CSV)", exportar_lancamentos),
+        "9": ("Lançamentos recorrentes", gerenciar_recorrentes),
+        "10": ("Categorias", gerenciar_categorias),
+        "11": ("Exportar para Excel (CSV)", exportar_lancamentos),
     }
 
     print("💰 Bem-vindo ao Controle de Gastos!")
     while True:
-        print(f"\n----- MENU -----   Saldo: {formatar_saldo(calcular_saldo(dados['lancamentos']))}")
+        print(f"\n----- MENU -----   Saldo: {texto_saldo(dados)}")
         for chave, (nome, _) in acoes.items():
-            print(f"{chave}. {nome}")
-        print("0. Sair")
+            print(f"{chave:>2}. {nome}")
+        print(" 0. Sair")
 
         escolha = input("Opção: ").strip()
         if escolha == "0":

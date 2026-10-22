@@ -8,7 +8,8 @@ Registra despesas (dinheiro que sai) e receitas (dinheiro que entra) e mostra:
   - um gráfico com a evolução dos últimos meses.
 
 Lançamentos marcados como "Repetir todo mês" (salário, aluguel...) são
-criados sozinhos quando o mês seguinte chega.
+criados sozinhos quando o mês seguinte chega. As categorias podem ser
+personalizadas em "Gerenciar categorias".
 
 As regras (salvar, calcular, validar...) ficam em financas.py e são as
 mesmas da versão de terminal. Os dados ficam em "gastos.json".
@@ -21,14 +22,16 @@ from datetime import date
 from tkinter import filedialog, messagebox, ttk
 
 from financas import (
-    CATEGORIAS_DESPESA,
     TIPOS,
+    DadosAlteradosPorFora,
     DadosCorrompidos,
+    adicionar_categoria,
+    atualizar_recorrente,
     calcular_saldo,
     carregar_dados,
     categorias_do_tipo,
     criar_recorrente,
-    dados_vazios,
+    eh_futuro,
     exportar_csv,
     filtrar,
     formatar_data,
@@ -38,6 +41,9 @@ from financas import (
     formatar_reais,
     gerar_recorrentes,
     mes_atual,
+    parar_recorrente,
+    recorrente_do_lancamento,
+    remover_categoria,
     salvar_dados,
     situacao_orcamento,
     somar_meses,
@@ -68,13 +74,13 @@ ALERTA = "#d97706"         # laranja: orçamento quase no limite
 
 COR_TIPO = {"receita": ACENTO, "despesa": PERIGO}
 
-# Uma cor fixa para cada categoria de despesa (na mesma ordem de CATEGORIAS_DESPESA)
+# Cores das categorias de despesa, na ordem da lista de categorias (repetem se houver mais)
 CORES_CATEGORIAS = ["#10a37f", "#3b82f6", "#f59e0b", "#8b5cf6", "#ef4444", "#ec4899", "#64748b"]
 
 
-def cor_da_categoria(categoria):
-    if categoria in CATEGORIAS_DESPESA:
-        return CORES_CATEGORIAS[CATEGORIAS_DESPESA.index(categoria) % len(CORES_CATEGORIAS)]
+def cor_da_categoria(categoria, categorias):
+    if categoria in categorias:
+        return CORES_CATEGORIAS[categorias.index(categoria) % len(CORES_CATEGORIAS)]
     return CORES_CATEGORIAS[-1]
 
 
@@ -130,24 +136,49 @@ class AppGastos(tk.Tk):
         try:
             dados = carregar_dados()
         except DadosCorrompidos as erro:
-            dados = dados_vazios()
+            dados = erro.dados
             backup = erro.backup.name
-            self.after(300, lambda: messagebox.showwarning(
-                "Arquivo corrompido",
-                "Não foi possível ler os dados salvos.\n\n"
-                f"Nada foi apagado: o arquivo antigo foi guardado como \"{backup}\" "
-                "e o programa começou com uma lista vazia."))
+            if erro.ignorados:
+                texto = (f"{erro.ignorados} item(ns) inválido(s) nos dados salvos foram ignorados.\n\n"
+                         f"Nada foi apagado: o arquivo original foi copiado para \"{backup}\".")
+            else:
+                texto = ("Não foi possível ler os dados salvos.\n\n"
+                         f"Nada foi apagado: o arquivo antigo foi guardado como \"{backup}\" "
+                         "e o programa começou com uma lista vazia.")
+            self.after(300, lambda: messagebox.showwarning("Arquivo corrompido", texto))
 
         criados = gerar_recorrentes(dados)
         if criados:
-            salvar_dados(dados)
+            try:
+                salvar_dados(dados)
+            except OSError:
+                pass  # os lançamentos estão na tela; o próximo salvamento tenta de novo
             self.after(300, lambda: messagebox.showinfo(
                 "Lançamentos recorrentes",
                 f"{criados} lançamento(s) que se repetem todo mês foram adicionados automaticamente."))
         return dados
 
     def salvar(self):
-        salvar_dados(self.dados)
+        """Salva e atualiza a tela. Se a versão de terminal mexeu no arquivo enquanto
+        a janela estava aberta, pergunta qual das duas versões manter."""
+        try:
+            salvar_dados(self.dados)
+        except DadosAlteradosPorFora:
+            manter = messagebox.askyesno(
+                "Dados alterados em outro lugar",
+                "Os dados foram alterados por outro programa enquanto esta janela estava aberta "
+                "(a versão de terminal está aberta?).\n\n"
+                "Sim: salvar a versão desta janela e descartar as mudanças feitas lá.\n"
+                "Não: recarregar o arquivo e descartar a última alteração feita aqui.",
+                icon="warning")
+            if manter:
+                salvar_dados(self.dados, forcar=True)
+            else:
+                self.dados = self.carregar()
+                self.limpar_formulario()  # as posições dos lançamentos podem ter mudado
+                self.mudar_tipo(self.tipo)
+        except OSError as erro:
+            messagebox.showerror("Erro ao salvar", f"Não foi possível salvar os dados.\n\n{erro}")
         self.atualizar_tudo()
 
     def lancamentos_visiveis(self):
@@ -303,7 +334,7 @@ class AppGastos(tk.Tk):
 
         indicadores = tk.Frame(self, bg=FUNDO)
         indicadores.pack(fill="x", padx=self.px(24), pady=self.px(16))
-        _, self.label_saldo = self.criar_indicador(indicadores, "Saldo atual", 0, "#3b82f6")
+        self.titulo_saldo, self.label_saldo = self.criar_indicador(indicadores, "Saldo atual", 0, "#3b82f6")
         self.titulo_receitas, self.label_receitas = self.criar_indicador(indicadores, "", 1, ACENTO)
         self.titulo_despesas, self.label_despesas = self.criar_indicador(indicadores, "", 2, PERIGO)
 
@@ -392,8 +423,10 @@ class AppGastos(tk.Tk):
         self.botao_cancelar = ttk.Button(frame, text="Cancelar edição", style="Secundario.TButton",
                                          cursor="hand2", command=self.limpar_formulario)
 
+        ttk.Button(frame, text="Gerenciar categorias", style="Link.TButton", cursor="hand2",
+                   command=self.abrir_categorias).pack(side="bottom", anchor="w")
         ttk.Button(frame, text="Ver lançamentos recorrentes", style="Link.TButton", cursor="hand2",
-                   command=self.abrir_recorrentes).pack(side="bottom", anchor="w")
+                   command=self.abrir_recorrentes).pack(side="bottom", anchor="w", pady=(0, self.px(6)))
 
         # Nos campos do formulário, Enter salva e Esc cancela a edição
         for filho in frame.winfo_children():
@@ -410,9 +443,9 @@ class AppGastos(tk.Tk):
             else:
                 botao.config(bg=FUNDO, fg=TEXTO_SUAVE)
 
-        categorias = categorias_do_tipo(tipo)
+        categorias = categorias_do_tipo(self.dados, tipo)
         self.combo_categoria.config(values=categorias)
-        self.var_categoria.set(categoria or categorias[0])
+        self.var_categoria.set(categoria if categoria in categorias else categorias[0])
         self.atualizar_botao_salvar()
 
     def atualizar_botao_salvar(self):
@@ -439,9 +472,19 @@ class AppGastos(tk.Tk):
             if self.var_repetir.get():
                 criar_recorrente(self.dados, lancamento)
         else:
-            if self.dados["lancamentos"][self.editando].get("recorrente"):
-                lancamento["recorrente"] = True
+            antigo = self.dados["lancamentos"][self.editando]
+            if antigo.get("recorrente"):
+                lancamento["recorrente"] = antigo["recorrente"]
             self.dados["lancamentos"][self.editando] = lancamento
+
+            recorrente = recorrente_do_lancamento(self.dados, lancamento)
+            campos = ("tipo", "descricao", "valor", "categoria", "data")
+            mudou = any(antigo[c] != lancamento[c] for c in campos)
+            if recorrente and mudou and messagebox.askyesno(
+                    "Lançamento recorrente",
+                    "Este lançamento se repete todo mês.\n\n"
+                    "Aplicar as mudanças também aos próximos meses?"):
+                atualizar_recorrente(recorrente, lancamento)
 
         # Mostra o mês do lançamento salvo, para a pessoa ver onde ele foi parar
         if self.mes is not None:
@@ -519,6 +562,7 @@ class AppGastos(tk.Tk):
             ("valor", "VALOR", 130, "e"),
         ])
         self.tabela.tag_configure("receita", foreground=ACENTO_ESCURO)
+        self.tabela.tag_configure("futuro", foreground=TEXTO_SUAVE)
         self.criar_rolagem(aba, self.tabela)
         self.tabela.pack(side="left", fill="both", expand=True)
         self.tabela.bind("<Double-1>", self.editar_selecionado)
@@ -585,8 +629,14 @@ class AppGastos(tk.Tk):
         self.label_receitas.config(text=formatar_reais(totais["receita"]))
         self.label_despesas.config(text=formatar_reais(totais["despesa"]))
 
-        saldo = calcular_saldo(self.dados["lancamentos"])
+        # O saldo atual não conta o que está agendado para depois de hoje
+        saldo = calcular_saldo(self.dados["lancamentos"], ate=date.today())
+        previsto = calcular_saldo(self.dados["lancamentos"])
         self.label_saldo.config(text=formatar_saldo(saldo), foreground=PERIGO if saldo < 0 else TEXTO)
+        titulo = "Saldo atual"
+        if previsto != saldo:
+            titulo += f"  ·  com os agendados: {formatar_saldo(previsto)}"
+        self.titulo_saldo.config(text=titulo)
 
     def atualizar_lista(self):
         self.tabela.delete(*self.tabela.get_children())
@@ -596,7 +646,11 @@ class AppGastos(tk.Tk):
         for linha, (indice, l) in enumerate(itens):
             sinal = "+" if l["tipo"] == "receita" else "−"
             descricao = f"↻  {l['descricao']}" if l.get("recorrente") else l["descricao"]
-            tags = [l["tipo"]] + (["listra"] if linha % 2 else [])
+            cor = l["tipo"]
+            if eh_futuro(l):
+                descricao += "  (agendado)"
+                cor = "futuro"  # cinza, para não parecer que já aconteceu
+            tags = [cor] + (["listra"] if linha % 2 else [])
             self.tabela.insert("", "end", iid=str(indice), tags=tags, values=(
                 formatar_data(l["data"]), descricao, l["categoria"],
                 f"{sinal} {formatar_reais(l['valor'])}"))
@@ -636,6 +690,7 @@ class AppGastos(tk.Tk):
                           fill=TEXTO_SUAVE, font=(FONTE, 10))
             return
 
+        lista_categorias = categorias_do_tipo(self.dados, "despesa")
         total_geral = sum(totais.values()) or 1
         maior = max(totais.values(), default=0) or 1
 
@@ -654,12 +709,12 @@ class AppGastos(tk.Tk):
             if situacao == "sem":
                 # Sem orçamento: barra proporcional à maior categoria
                 proporcao = gasto / maior
-                cor = cor_da_categoria(categoria)
+                cor = cor_da_categoria(categoria, lista_categorias)
                 texto, cor_texto = f"{formatar_reais(gasto)}  ·  {gasto / total_geral * 100:.1f}%", TEXTO_SUAVE
             else:
                 # Com orçamento: barra mostra quanto do limite já foi usado
                 proporcao = min(gasto / limite, 1)
-                cor = {"ok": cor_da_categoria(categoria), "alerta": ALERTA, "estourado": PERIGO}[situacao]
+                cor = {"ok": cor_da_categoria(categoria, lista_categorias), "alerta": ALERTA, "estourado": PERIGO}[situacao]
                 texto = f"{formatar_reais(gasto)} de {formatar_reais(limite)}"
                 cor_texto = TEXTO_SUAVE
                 if situacao == "alerta":
@@ -759,6 +814,11 @@ class AppGastos(tk.Tk):
         l = self.dados["lancamentos"][indice]
         if messagebox.askyesno("Remover", f"Remover \"{l['descricao']}\" ({formatar_reais(l['valor'])})?"):
             self.dados["lancamentos"].pop(indice)
+            recorrente = recorrente_do_lancamento(self.dados, l)
+            if recorrente and messagebox.askyesno(
+                    "Lançamento recorrente",
+                    "Este lançamento se repete todo mês.\n\nParar de criá-lo nos próximos meses?"):
+                parar_recorrente(self.dados, recorrente)
             self.limpar_formulario()  # as posições mudaram: uma edição aberta ficaria errada
             self.salvar()
 
@@ -811,12 +871,12 @@ class AppGastos(tk.Tk):
         janela, frame = self.criar_dialogo("Orçamentos mensais")
         ttk.Label(frame, style="Suave.TLabel", justify="left",
                   text="Quanto você quer gastar, no máximo, por mês em cada categoria.\n"
-                       "Deixe em branco para não ter limite.").pack(anchor="w", pady=(self.px(2), self.px(14)))
+                       "Deixe em branco (ou 0) para não ter limite.").pack(anchor="w", pady=(self.px(2), self.px(14)))
 
         grade = ttk.Frame(frame)
         grade.pack(fill="x")
         variaveis = {}
-        for linha, categoria in enumerate(CATEGORIAS_DESPESA):
+        for linha, categoria in enumerate(categorias_do_tipo(self.dados, "despesa")):
             ttk.Label(grade, text=categoria).grid(row=linha, column=0, sticky="w", pady=self.px(4))
             atual = self.dados["orcamentos"].get(categoria)
             variaveis[categoria] = tk.StringVar(value=formatar_numero(atual) if atual else "")
@@ -829,10 +889,12 @@ class AppGastos(tk.Tk):
             for categoria, variavel in variaveis.items():
                 if variavel.get().strip():
                     try:
-                        novos[categoria] = validar_valor(variavel.get())
+                        valor = validar_valor(variavel.get(), aceitar_zero=True)
                     except ValueError as erro:
                         messagebox.showerror("Valor inválido", f"{categoria}: {erro}", parent=janela)
                         return
+                    if valor:
+                        novos[categoria] = valor
             self.dados["orcamentos"] = novos
             janela.destroy()
             self.salvar()
@@ -889,7 +951,7 @@ class AppGastos(tk.Tk):
                                    f"Parar de criar \"{r['descricao']}\" todo mês?\n\n"
                                    "Os lançamentos que já foram criados continuam na lista.",
                                    parent=janela):
-                self.dados["recorrentes"].remove(r)
+                parar_recorrente(self.dados, r)
                 self.salvar()
                 preencher()
 
@@ -902,6 +964,95 @@ class AppGastos(tk.Tk):
 
         preencher()
         self.mostrar_dialogo(janela)
+
+    def abrir_categorias(self):
+        janela, frame = self.criar_dialogo("Categorias")
+        ttk.Label(frame, style="Suave.TLabel", justify="left",
+                  text="Crie as suas próprias categorias ou remova as que não usa.\n"
+                       "Categorias que já têm lançamentos não podem ser removidas.").pack(
+            anchor="w", pady=(self.px(2), self.px(14)))
+
+        colunas = ttk.Frame(frame)
+        colunas.pack(fill="both")
+
+        def coluna(tipo, titulo, posicao):
+            area = ttk.Frame(colunas)
+            area.grid(row=0, column=posicao, sticky="nsew",
+                      padx=(0, self.px(18)) if posicao == 0 else 0)
+            ttk.Label(area, text=titulo, font=(FONTE, 10, "bold"),
+                      foreground=COR_TIPO[tipo]).pack(anchor="w", pady=(0, self.px(6)))
+
+            caixa = ttk.Frame(area, height=self.px(280), width=self.px(230))
+            caixa.pack(fill="both")
+            caixa.pack_propagate(False)
+            tabela = self.criar_tabela(caixa, [("nome", "NOME", 200, "w")])
+            self.criar_rolagem(caixa, tabela)
+            tabela.pack(side="left", fill="both", expand=True)
+
+            def preencher():
+                tabela.delete(*tabela.get_children())
+                # O "iid" de cada linha é a posição da categoria na lista
+                for linha, nome in enumerate(categorias_do_tipo(self.dados, tipo)):
+                    tabela.insert("", "end", iid=str(linha), values=(nome,),
+                                  tags=["listra"] if linha % 2 else [])
+
+            var_nome = tk.StringVar()
+
+            def adicionar():
+                try:
+                    nome = adicionar_categoria(self.dados, tipo, var_nome.get())
+                except ValueError as erro:
+                    messagebox.showerror("Categorias", str(erro), parent=janela)
+                    return
+                var_nome.set("")
+                self.salvar_categorias(tipo)
+                preencher()
+                lista = categorias_do_tipo(self.dados, tipo)
+                if nome in lista:
+                    linha = str(lista.index(nome))
+                    tabela.selection_set(linha)
+                    tabela.see(linha)
+
+            def remover():
+                selecionado = tabela.selection()
+                if not selecionado:
+                    messagebox.showinfo("Categorias", "Selecione uma categoria primeiro.", parent=janela)
+                    return
+                nome = categorias_do_tipo(self.dados, tipo)[int(selecionado[0])]
+                try:
+                    remover_categoria(self.dados, tipo, nome)
+                except ValueError as erro:
+                    messagebox.showerror("Categorias", str(erro), parent=janela)
+                    return
+                self.salvar_categorias(tipo)
+                preencher()
+
+            nova = ttk.Frame(area)
+            nova.pack(fill="x", pady=(self.px(8), 0))
+            entrada = ttk.Entry(nova, textvariable=var_nome, width=18)
+            entrada.pack(side="left", fill="x", expand=True)
+            entrada.bind("<Return>", lambda evento: adicionar())
+            ttk.Button(nova, text="Adicionar", style="Secundario.TButton", cursor="hand2",
+                       command=adicionar).pack(side="left", padx=(self.px(6), 0))
+            ttk.Button(area, text="Remover selecionada", style="Perigo.TButton", cursor="hand2",
+                       command=remover).pack(fill="x", pady=(self.px(6), 0))
+            tabela.bind("<Delete>", lambda evento: remover())
+            preencher()
+
+        coluna("despesa", "Despesas", 0)
+        coluna("receita", "Receitas", 1)
+
+        botoes = ttk.Frame(frame)
+        botoes.pack(fill="x", pady=(self.px(16), 0))
+        ttk.Button(botoes, text="Fechar", style="Secundario.TButton", cursor="hand2",
+                   command=janela.destroy).pack(side="right")
+        self.mostrar_dialogo(janela)
+
+    def salvar_categorias(self, tipo):
+        """Salva e atualiza a lista de categorias do formulário, se for do mesmo tipo."""
+        self.salvar()
+        if tipo == self.tipo:
+            self.mudar_tipo(self.tipo, categoria=self.var_categoria.get())
 
 
 if __name__ == "__main__":
