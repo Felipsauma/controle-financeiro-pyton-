@@ -40,6 +40,7 @@ from financas import (
     formatar_numero,
     formatar_reais,
     gerar_recorrentes,
+    manter_extras,
     mes_atual,
     parar_recorrente,
     recorrente_do_lancamento,
@@ -473,8 +474,7 @@ class AppGastos(tk.Tk):
                 criar_recorrente(self.dados, lancamento)
         else:
             antigo = self.dados["lancamentos"][self.editando]
-            if antigo.get("recorrente"):
-                lancamento["recorrente"] = antigo["recorrente"]
+            manter_extras(antigo, lancamento)  # recorrente, parcela, conta, conta a pagar...
             self.dados["lancamentos"][self.editando] = lancamento
 
             recorrente = recorrente_do_lancamento(self.dados, lancamento)

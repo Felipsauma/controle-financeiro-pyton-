@@ -23,11 +23,19 @@ from financas import (
     calcular_saldo,
     carregar_dados,
     categorias_do_tipo,
+    contas_a_pagar,
+    criar_conta,
+    criar_meta,
+    criar_parcelas,
     criar_recorrente,
     dados_vazios,
     data_no_mes,
+    definir_icone,
     eh_futuro,
+    esta_atrasado,
+    esta_pendente,
     exportar_csv,
+    fatura,
     filtrar,
     formatar_mes,
     formatar_mes_curto,
@@ -35,18 +43,32 @@ from financas import (
     formatar_reais,
     formatar_saldo,
     gerar_recorrentes,
+    icone_da_categoria,
+    ler_extrato,
+    limite_disponivel,
+    manter_extras,
+    marcar_pago,
+    mes_da_fatura,
+    movimentar_meta,
     parar_recorrente,
+    parcelas_seguintes,
+    parece_ja_lancado,
+    progresso_da_meta,
     recorrente_do_lancamento,
     remover_categoria,
+    remover_conta,
+    saldo_da_conta,
     salvar_dados,
     situacao_orcamento,
     somar_meses,
+    sugerir_categoria,
     totais_por_categoria,
     totais_por_mes,
     totais_por_tipo,
     validar_data,
     validar_mes,
     validar_valor,
+    variacao,
 )
 
 
@@ -462,6 +484,252 @@ class TesteExportacao(ComPastaTemporaria):
             ["05/10/2026", "Receita", "Salário", "Salário", "3000,00"],
             ["10/10/2026", "Despesa", "Aluguel; outubro", "Moradia", "-1234,50"],
         ])
+
+
+class TesteParcelas(unittest.TestCase):
+    def test_divide_em_meses_e_os_centavos_vao_para_as_primeiras(self):
+        dados = dados_vazios()
+        compra = lancamento("despesa", 100.0, "2026-01-31", descricao="TV")
+        parcelas = criar_parcelas(dados, compra, 3)
+        self.assertEqual([p["valor"] for p in parcelas], [33.34, 33.33, 33.33])
+        # 31 de fevereiro não existe: fica no último dia do mês
+        self.assertEqual([p["data"] for p in parcelas], ["2026-01-31", "2026-02-28", "2026-03-31"])
+        self.assertEqual(parcelas[1]["descricao"], "TV (2/3)")
+        self.assertEqual(len({p["compra"] for p in parcelas}), 1)
+        self.assertEqual(calcular_saldo(dados["lancamentos"]), -100.0)
+
+    def test_numero_de_parcelas_invalido(self):
+        for quantidade in (1, financas.MAXIMO_PARCELAS + 1):
+            with self.assertRaises(ValueError):
+                criar_parcelas(dados_vazios(), lancamento("despesa", 100.0, "2026-01-10"), quantidade)
+        with self.assertRaises(ValueError):  # 0,05 não divide em 10 parcelas
+            criar_parcelas(dados_vazios(), lancamento("despesa", 0.05, "2026-01-10"), 10)
+
+    def test_parcelas_seguintes(self):
+        dados = dados_vazios()
+        parcelas = criar_parcelas(dados, lancamento("despesa", 300.0, "2026-01-10"), 3)
+        seguintes = parcelas_seguintes(dados, parcelas[1])
+        self.assertEqual([l["parcela"] for _, l in seguintes], ["2/3", "3/3"])
+
+
+class TesteContasAPagar(unittest.TestCase):
+    def test_conta_pendente_nao_entra_no_saldo_atual(self):
+        hoje = date(2026, 10, 15)
+        luz = lancamento("despesa", 150.0, "2026-10-10")
+        luz["pendente"] = True
+        lancamentos = [lancamento("receita", 1000.0, "2026-10-01"), luz]
+        self.assertEqual(calcular_saldo(lancamentos, ate=hoje), 1000.0)
+        self.assertEqual(calcular_saldo(lancamentos), 850.0)  # o previsto conta com ela
+        self.assertTrue(esta_atrasado(luz, hoje))
+
+        marcar_pago(luz, hoje)
+        self.assertFalse(esta_pendente(luz))
+        self.assertEqual(luz["data"], "2026-10-15")
+        self.assertEqual(calcular_saldo(lancamentos, ate=hoje), 850.0)
+
+    def test_recorrente_de_conta_a_pagar_cria_contas_a_pagar(self):
+        dados = dados_vazios()
+        aluguel = lancamento("despesa", 1000.0, "2026-01-05", categoria="Moradia")
+        aluguel["pendente"] = True
+        dados["lancamentos"].append(aluguel)
+        criar_recorrente(dados, aluguel)
+        gerar_recorrentes(dados, hoje=date(2026, 2, 10))
+        self.assertTrue(dados["lancamentos"][-1]["pendente"])
+        self.assertEqual([l["data"] for _, l in contas_a_pagar(dados["lancamentos"])],
+                         ["2026-01-05", "2026-02-05"])
+
+
+class TesteContasECartoes(unittest.TestCase):
+    def setUp(self):
+        self.dados = dados_vazios()
+        self.cartao = criar_conta(self.dados, "Nubank", "cartao", fechamento=3, vencimento=10, limite=1000.0)
+
+    def test_compra_depois_do_fechamento_vai_para_a_fatura_seguinte(self):
+        self.assertEqual(mes_da_fatura(self.cartao, "2026-10-03"), "2026-10")
+        self.assertEqual(mes_da_fatura(self.cartao, "2026-10-04"), "2026-11")
+
+    def test_fatura_e_limite(self):
+        for data, valor in [("2026-10-01", 100.0), ("2026-10-05", 200.0), ("2026-10-20", 50.0)]:
+            l = lancamento("despesa", valor, data)
+            l["conta"] = self.cartao["id"]
+            self.dados["lancamentos"].append(l)
+        novembro = fatura(self.dados["lancamentos"], self.cartao, "2026-11")
+        self.assertEqual(novembro["total"], 250.0)
+        self.assertEqual(novembro["vencimento"], date(2026, 11, 10))
+        self.assertEqual(limite_disponivel(self.dados["lancamentos"], self.cartao, date(2026, 10, 20)), 750.0)
+
+    def test_vencimento_antes_do_fechamento_e_no_mes_seguinte(self):
+        cartao = criar_conta(self.dados, "Outro", "cartao", fechamento=25, vencimento=5)
+        self.assertEqual(fatura([], cartao, "2026-10")["vencimento"], date(2026, 11, 5))
+
+    def test_saldo_da_conta_e_remover(self):
+        conta = criar_conta(self.dados, "Carteira", "dinheiro")
+        l = lancamento("receita", 80.0, "2020-01-01")
+        l["conta"] = conta["id"]
+        self.dados["lancamentos"].append(l)
+        self.assertEqual(saldo_da_conta(self.dados["lancamentos"], conta), 80.0)
+        remover_conta(self.dados, conta)
+        self.assertNotIn("conta", l)
+        self.assertEqual(len(self.dados["lancamentos"]), 1)
+
+    def test_nome_repetido_e_cartao_sem_dias(self):
+        with self.assertRaises(ValueError):
+            criar_conta(self.dados, "nubank", "corrente")
+        with self.assertRaises(ValueError):
+            criar_conta(self.dados, "Inter", "cartao")
+
+
+class TesteMetas(unittest.TestCase):
+    def test_guardar_retirar_e_quanto_por_mes(self):
+        dados = dados_vazios()
+        meta = criar_meta(dados, "Viagem", 1200.0, prazo="2026-12")
+        movimentar_meta(meta, 300.0)
+        progresso = progresso_da_meta(meta, hoje=date(2026, 10, 15))
+        self.assertEqual(progresso["falta"], 900.0)
+        self.assertEqual(progresso["por_mes"], 300.0)  # outubro, novembro e dezembro
+        self.assertEqual(progresso["porcentagem"], 25.0)
+        with self.assertRaises(ValueError):
+            movimentar_meta(meta, -500.0)
+        movimentar_meta(meta, -100.0)
+        self.assertEqual(meta["guardado"], 200.0)
+
+
+class TesteCofrinho(ComPastaTemporaria):
+    def test_guardar_retirar_e_total(self):
+        dados = dados_vazios()
+        financas.movimentar_cofrinho(dados, 300.0, "Sobra", data="2026-10-01")
+        financas.movimentar_cofrinho(dados, -100.0, data="2026-10-02")
+        self.assertEqual(financas.saldo_do_cofrinho(dados), 200.0)
+        self.assertEqual(dados["cofrinho"][1]["descricao"], "Retirado")
+        with self.assertRaises(ValueError):
+            financas.movimentar_cofrinho(dados, -200.01)
+        meta = criar_meta(dados, "Viagem", 1000.0)
+        movimentar_meta(meta, 50.0)
+        self.assertEqual(financas.total_guardado(dados), 250.0)
+
+    def test_apagar_movimento_nao_deixa_negativo(self):
+        dados = dados_vazios()
+        entrada = financas.movimentar_cofrinho(dados, 100.0)
+        financas.movimentar_cofrinho(dados, -80.0)
+        with self.assertRaises(ValueError):  # sem a entrada, sobraria -80
+            financas.desfazer_movimento(dados, entrada["id"])
+        saida = dados["cofrinho"][1]
+        financas.desfazer_movimento(dados, saida["id"])
+        self.assertEqual(financas.saldo_do_cofrinho(dados), 100.0)
+
+    def test_mais_recente_primeiro_e_sobrevive_ao_arquivo(self):
+        dados = dados_vazios()
+        financas.movimentar_cofrinho(dados, 10.0, "primeiro", data="2026-10-01")
+        financas.movimentar_cofrinho(dados, 20.0, "segundo", data="2026-10-01")
+        self.assertEqual([m["descricao"] for m in financas.movimentos_do_cofrinho(dados)],
+                         ["segundo", "primeiro"])
+        salvar_dados(dados, self.arquivo)
+        self.assertEqual(carregar_dados(self.arquivo)["cofrinho"], dados["cofrinho"])
+
+
+class TesteComparacaoEIcones(unittest.TestCase):
+    def test_variacao(self):
+        self.assertEqual(variacao(150, 100), 50.0)
+        self.assertEqual(variacao(50, 100), -50.0)
+        self.assertIsNone(variacao(50, 0))
+
+    def test_icones(self):
+        dados = dados_vazios()
+        self.assertEqual(icone_da_categoria(dados, "Moradia"), "🏠")
+        self.assertEqual(icone_da_categoria(dados, "Pets"), financas.ICONE_GENERICO)
+        definir_icone(dados, "Pets", "🐶")
+        self.assertEqual(icone_da_categoria(dados, "Pets"), "🐶")
+        with self.assertRaises(ValueError):
+            definir_icone(dados, "Pets", "<script>")
+
+
+class TesteNovosDadosNoArquivo(ComPastaTemporaria):
+    def test_contas_metas_e_icones_sobrevivem_ao_salvar_e_carregar(self):
+        dados = dados_vazios()
+        criar_conta(dados, "Nubank", "cartao", fechamento=3, vencimento=10)
+        criar_meta(dados, "Viagem", 5000.0)
+        definir_icone(dados, "Lazer", "🎮")
+        salvar_dados(dados, self.arquivo)
+        lido = carregar_dados(self.arquivo)
+        self.assertEqual(lido["contas"], dados["contas"])
+        self.assertEqual(lido["metas"], dados["metas"])
+        self.assertEqual(lido["icones"], {"Lazer": "🎮"})
+
+    def test_conta_invalida_e_ignorada_com_backup(self):
+        self.arquivo.write_text(json.dumps({"contas": [{"id": "x", "nome": "Cartão", "tipo": "cartao"}]}),
+                                encoding="utf-8")
+        with self.assertRaises(DadosCorrompidos) as erro:
+            carregar_dados(self.arquivo)
+        self.assertEqual(erro.exception.ignorados, 1)
+
+    def test_manter_extras_ao_editar(self):
+        antigo = lancamento("despesa", 10.0, "2026-01-01")
+        antigo.update(conta="c1", pendente=True, compra="abc", parcela="1/2")
+        novo = manter_extras(antigo, lancamento("despesa", 20.0, "2026-01-01"))
+        self.assertEqual((novo["conta"], novo["pendente"], novo["parcela"]), ("c1", True, "1/2"))
+
+
+class TesteBackupDiario(ComPastaTemporaria):
+    def test_guarda_uma_copia_por_dia_antes_de_gravar_por_cima(self):
+        salvar_dados(dados_vazios(), self.arquivo)  # o arquivo ainda não existia: nada a copiar
+        self.assertFalse((self.pasta / "backups").exists())
+        dados = dados_vazios()
+        dados["orcamentos"]["Lazer"] = 100.0
+        salvar_dados(dados, self.arquivo)
+        salvar_dados(dados, self.arquivo)
+        copias = list((self.pasta / "backups").glob("gastos-*.json"))
+        self.assertEqual(len(copias), 1)
+        self.assertEqual(json.loads(copias[0].read_text(encoding="utf-8"))["orcamentos"], {})
+
+    def test_mantem_so_os_ultimos_dias(self):
+        pasta = self.pasta / "backups"
+        pasta.mkdir()
+        for dia in range(1, 36):
+            (pasta / f"gastos-2026-01-{dia:02d}.json").write_text("{}", encoding="utf-8")
+        self.arquivo.write_text("{}", encoding="utf-8")
+        financas._backup_do_dia(self.arquivo, hoje=date(2026, 2, 1))
+        copias = sorted(p.name for p in pasta.glob("gastos-*.json"))
+        self.assertEqual(len(copias), financas.DIAS_DE_BACKUP)
+        self.assertEqual(copias[-1], "gastos-2026-02-01.json")
+
+
+class TesteImportarExtrato(unittest.TestCase):
+    OFX = b"""OFXHEADER:100
+<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261015120000[-3:BRT]<TRNAMT>-45.90<MEMO>PADARIA PAO QUENTE</STMTTRN>
+<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261005<TRNAMT>3500.00<MEMO>SALARIO</STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"""
+
+    def test_ofx(self):
+        itens = ler_extrato(self.OFX, "extrato.ofx")
+        self.assertEqual(itens[0], {"tipo": "despesa", "descricao": "PADARIA PAO QUENTE",
+                                    "valor": 45.9, "data": "2026-10-15"})
+        self.assertEqual((itens[1]["tipo"], itens[1]["valor"]), ("receita", 3500.0))
+
+    def test_csv_brasileiro_em_latin1(self):
+        texto = "Data;Histórico;Valor\n15/10/2026;Farmácia;-1.234,56\n16/10/2026;Pix recebido;200,00\n"
+        itens = ler_extrato(texto.encode("cp1252"), "extrato.csv")
+        self.assertEqual(itens[0], {"tipo": "despesa", "descricao": "Farmácia",
+                                    "valor": 1234.56, "data": "2026-10-15"})
+        self.assertEqual(itens[1]["tipo"], "receita")
+
+    def test_csv_de_fatura_com_sinal_invertido(self):
+        texto = "date,title,amount\n2026-10-15,Mercado,89.90\n"
+        itens = ler_extrato(texto.encode(), "fatura.csv", inverter=True)
+        self.assertEqual((itens[0]["tipo"], itens[0]["valor"]), ("despesa", 89.9))
+
+    def test_arquivo_sem_colunas_conhecidas(self):
+        with self.assertRaises(ValueError):
+            ler_extrato(b"a;b;c\n1;2;3\n", "x.csv")
+        with self.assertRaises(ValueError):
+            ler_extrato(b"", "x.csv")
+
+    def test_sugerir_categoria_e_repetidos(self):
+        dados = dados_vazios()
+        dados["lancamentos"].append(lancamento("despesa", 45.9, "2026-10-15", "Padaria", "Alimentação"))
+        self.assertEqual(sugerir_categoria(dados, "PADARIA", "despesa"), "Alimentação")
+        self.assertEqual(sugerir_categoria(dados, "Posto", "despesa"), "Outros")
+        self.assertTrue(parece_ja_lancado(dados, {"data": "2026-10-15", "tipo": "despesa", "valor": 45.9}))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # Dados pessoais (cada pessoa tem o seu, criado automaticamente)
 gastos.json
+config-web.json
+backups/
 gastos-corrompido-*.json
 *.json.tmp
 lancamentos*.csv

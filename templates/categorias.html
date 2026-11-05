@@ -1,33 +1,58 @@
 {% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
 
-{% block topo %}
-  <a class="voltar" href="{{ url_for('mais') }}">‹ Mais</a>
-  <h1>Categorias</h1>
-  <span class="espaco"></span>
-{% endblock %}
+{% block titulo %}Categorias{% endblock %}
+{% block topo %}{{ topo("Categorias", url_for('mais'), "Mais") }}{% endblock %}
+
+{% macro escolher_icone(nome_do_grupo, atual) -%}
+  <div class="icones-grade" role="radiogroup" aria-label="Ícone">
+    {% for icone in icones %}
+      <label class="icone-opcao">
+        <input type="radio" name="icone" value="{{ icone }}"{{ " checked" if icone == atual }}>
+        <span>{{ icone }}</span>
+      </label>
+    {% endfor %}
+  </div>
+{%- endmacro %}
 
 {% block conteudo %}
-  {% for tipo, titulo in [("despesa", "Categorias de despesa"), ("receita", "Categorias de receita")] %}
-    <section class="cartao">
+  {% for tipo, titulo in [("despesa", "Despesas"), ("receita", "Receitas")] %}
+    <section class="bloco">
       <h2>{{ titulo }}</h2>
-      {% for nome in listas[tipo] %}
-        <div class="linha">
-          <span>{{ nome }}</span>
-          <form method="post" onsubmit="return confirm('Remover esta categoria?')">
-            <input type="hidden" name="tipo" value="{{ tipo }}">
-            <input type="hidden" name="acao" value="remover">
-            <input type="hidden" name="nome" value="{{ nome }}">
-            <button class="botao-texto" type="submit">Remover</button>
-          </form>
-        </div>
-      {% endfor %}
-      <form class="adicionar" method="post">
-        <input type="hidden" name="tipo" value="{{ tipo }}">
-        <input type="hidden" name="acao" value="adicionar">
-        <input name="nome" placeholder="Nova categoria" maxlength="30" required aria-label="Nova categoria">
-        <button class="botao" type="submit">Criar</button>
-      </form>
+      <div class="lista">
+        {% for nome, icone in listas[tipo] %}
+          <details class="categoria-editar">
+            <summary>
+              <span class="icone" aria-hidden="true">{{ icone }}</span>
+              <span class="descricao">{{ nome }}</span>
+              <span class="suave pequeno">Editar</span>
+            </summary>
+            <form method="post">
+              <input type="hidden" name="tipo" value="{{ tipo }}">
+              <input type="hidden" name="nome" value="{{ nome }}">
+              {{ escolher_icone(tipo, icone) }}
+              <div class="linha-botoes">
+                <button class="botao-pequeno" type="submit" name="acao" value="icone">Trocar ícone</button>
+                <button class="botao-texto perigo-texto" type="submit" name="acao" value="remover"
+                        onclick="return confirm('Remover esta categoria?')">Remover categoria</button>
+              </div>
+            </form>
+          </details>
+        {% endfor %}
+      </div>
+      <details class="categoria-nova">
+        <summary class="botao secundario botao-largo">Nova categoria de {{ tipo }}</summary>
+        <form class="formulario painel" method="post">
+          <input type="hidden" name="tipo" value="{{ tipo }}">
+          <input type="hidden" name="acao" value="adicionar">
+          <label class="campo">Nome
+            <input name="nome" placeholder="Ex: Pets" maxlength="30" required>
+          </label>
+          {{ escolher_icone(tipo, icones[0]) }}
+          <button class="botao botao-largo" type="submit">Criar</button>
+        </form>
+      </details>
     </section>
   {% endfor %}
-  <p class="suave pequeno">Uma categoria que já tem lançamentos não pode ser removida.</p>
+  <p class="ajuda">Uma categoria que já tem lançamentos não pode ser removida.</p>
 {% endblock %}

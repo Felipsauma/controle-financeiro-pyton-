@@ -1,33 +1,35 @@
 {% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
 
-{% block topo %}
-  <a class="voltar" href="{{ url_for('mais') }}">‹ Mais</a>
-  <h1>Recorrentes</h1>
-  <span class="espaco"></span>
-{% endblock %}
+{% block titulo %}Recorrentes{% endblock %}
+{% block topo %}{{ topo("Recorrentes", url_for('mais'), "Mais") }}{% endblock %}
 
 {% block conteudo %}
-  <section class="cartao">
-    <p class="suave pequeno" style="margin-top: 0">
-      Estes lançamentos são criados sozinhos todo mês. Para criar um novo, marque
-      "Repetir todo mês" ao adicionar um lançamento.
-    </p>
-    {% for r in recorrentes %}
-      <div class="linha">
-        <span class="linha-texto">
-          <span class="descricao">{{ r.descricao }}</span>
-          <span class="categoria">
-            <span class="{{ r.tipo }}">{{ "+" if r.tipo == "receita" else "−" }} {{ formatar_reais(r.valor) }}</span>
-            · {{ r.categoria }} · todo dia {{ r.dia }}
+  <p class="introducao">
+    Estes lançamentos são criados sozinhos todo mês. Para criar um novo, marque
+    "Repetir todo mês" ao lançar.
+  </p>
+  {% if recorrentes %}
+    <div class="lista">
+      {% for r in recorrentes %}
+        <div class="item">
+          <span class="icone" aria-hidden="true">{{ icones[r.id] }}</span>
+          <span class="item-texto">
+            <span class="descricao">{{ r.descricao }}</span>
+            <span class="meta">
+              <span>Todo dia {{ r.dia }}</span><span>{{ r.categoria }}</span>
+              {%- if r.pendente %}<span class="etiqueta etiqueta-alerta">conta a pagar</span>{% endif %}
+            </span>
           </span>
-        </span>
-        <form method="post" action="{{ url_for('parar', identificador=r.id) }}"
-              onsubmit="return confirm('Parar de repetir este lançamento? Os que já foram criados continuam na lista.')">
-          <button class="botao-texto" type="submit">Parar</button>
-        </form>
-      </div>
-    {% else %}
-      <p class="vazio">Nenhum lançamento se repete todo mês.</p>
-    {% endfor %}
-  </section>
+          <span class="valor {{ r.tipo }}">{{ "+" if r.tipo == "receita" else "−" }} {{ formatar_reais(r.valor) }}</span>
+          <form method="post" action="{{ url_for('parar', identificador=r.id) }}"
+                onsubmit="return confirm('Parar de repetir este lançamento? Os que já foram criados continuam na lista.')">
+            <button class="botao-texto" type="submit">Parar</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="vazio">Nenhum lançamento se repete todo mês.</p>
+  {% endif %}
 {% endblock %}

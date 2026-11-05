@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
+
+{% block titulo %}Conferir importação{% endblock %}
+{% block topo %}{{ topo("Conferir", url_for('importar'), "Voltar") }}{% endblock %}
+
+{% block conteudo %}
+  <p class="introducao">
+    {{ itens|length }} lançamento(s) encontrados{% if conta %} para {{ conta.nome }}{% endif %}.
+    Desmarque o que não quiser importar. Os que parecem já estar na lista vêm desmarcados.
+  </p>
+  <form method="post" action="{{ url_for('confirmar_importacao') }}">
+    <input type="hidden" name="quantidade" value="{{ itens|length }}">
+    <input type="hidden" name="conta" value="{{ conta.id if conta else '' }}">
+    <div class="lista">
+      {% for item in itens %}
+        <div class="importado{{ ' repetido' if item.repetido }}">
+          <input type="hidden" name="data_{{ loop.index0 }}" value="{{ item.data }}">
+          <input type="hidden" name="descricao_{{ loop.index0 }}" value="{{ item.descricao }}">
+          <input type="hidden" name="valor_{{ loop.index0 }}" value="{{ formatar_numero(item.valor) }}">
+          <input type="hidden" name="tipo_{{ loop.index0 }}" value="{{ item.tipo }}">
+          <label class="importado-marcar">
+            <input type="checkbox" name="incluir_{{ loop.index0 }}"{{ "" if item.repetido else " checked" }}>
+            <span class="item-texto">
+              <span class="descricao">{{ item.descricao }}</span>
+              <span class="meta">
+                <span>{{ formatar_data(item.data) }}</span>
+                {% if item.repetido %}<span class="etiqueta etiqueta-alerta">parece já lançado</span>{% endif %}
+              </span>
+            </span>
+            <span class="valor {{ item.tipo }}">{{ "+" if item.tipo == "receita" else "−" }} {{ formatar_reais(item.valor) }}</span>
+          </label>
+          <select name="categoria_{{ loop.index0 }}" aria-label="Categoria de {{ item.descricao }}">
+            {% for c in categorias[item.tipo] %}
+              <option{{ " selected" if c == item.categoria }}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="acoes acoes-formulario">
+      <button class="botao botao-largo" type="submit">Importar os marcados</button>
+    </div>
+  </form>
+{% endblock %}

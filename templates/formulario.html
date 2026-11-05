@@ -1,18 +1,17 @@
 {% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
 {% set editando = indice is not none %}
 
 {% block titulo %}{{ "Editar lançamento" if editando else "Novo lançamento" }}{% endblock %}
 
 {% block topo %}
-  <a class="voltar" href="{{ url_for('inicio', mes=voltar or none) }}">‹ Voltar</a>
-  <h1>{{ "Editar" if editando else "Novo lançamento" }}</h1>
-  <span class="espaco"></span>
+  {{ topo("Editar" if editando else "Novo lançamento", url_for('inicio', mes=voltar or none)) }}
 {% endblock %}
 
 {% block conteudo %}
   {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
 
-  <form class="cartao formulario" method="post"
+  <form class="formulario" method="post"
         action="{{ url_for('salvar_edicao', indice=indice) if editando else url_for('criar') }}">
     <input type="hidden" name="c" value="{{ chave or '' }}">
     <input type="hidden" name="voltar" value="{{ voltar }}">
@@ -24,47 +23,93 @@
       <label for="tipo-receita">Receita</label>
     </div>
 
-    <label class="campo">Valor (R$)
+    <label class="valor-campo">
+      <span class="sr">Valor em reais</span>
+      <span class="valor-moeda" aria-hidden="true">R$</span>
       <input class="valor-grande" name="valor" value="{{ campos.valor }}" inputmode="decimal"
              placeholder="0,00" autocomplete="off" required{{ " autofocus" if not editando }}>
     </label>
 
+    {% for tipo in ["despesa", "receita"] %}
+      {% set escolhida = campos.categoria if campos.tipo == tipo and campos.categoria else categorias[tipo][0][0] %}
+      <fieldset class="chips so-{{ tipo }}">
+        <legend>Categoria</legend>
+        {% for nome, icone in categorias[tipo] %}
+          <label class="chip">
+            <input type="radio" name="categoria_{{ tipo }}" value="{{ nome }}"{{ " checked" if nome == escolhida }}>
+            <span><span aria-hidden="true">{{ icone }}</span> {{ nome }}</span>
+          </label>
+        {% endfor %}
+      </fieldset>
+    {% endfor %}
+
     <label class="campo">Descrição
-      <input name="descricao" value="{{ campos.descricao }}" placeholder="Ex: Almoço" maxlength="80">
+      <input name="descricao" value="{{ campos.descricao }}" placeholder="Ex: Almoço" maxlength="80"
+             autocomplete="off">
     </label>
 
-    {% for tipo in ["despesa", "receita"] %}
-      <label class="campo so-{{ tipo }}">Categoria
-        <select name="categoria_{{ tipo }}">
-          {% for c in categorias[tipo] %}
-            <option{{ " selected" if campos.tipo == tipo and c == campos.categoria }}>{{ c }}</option>
+    <div class="campos-lado-a-lado">
+      <label class="campo">Data
+        <input type="date" name="data" value="{{ campos.data }}">
+      </label>
+      {% if not editando %}
+        <label class="campo so-despesa">Parcelas
+          <input name="parcelas" value="{{ campos.parcelas }}" inputmode="numeric" placeholder="À vista"
+                 pattern="[0-9]*" autocomplete="off" aria-describedby="ajuda-parcelas">
+        </label>
+      {% endif %}
+    </div>
+    {% if not editando %}
+      <p class="ajuda so-despesa" id="ajuda-parcelas">
+        Numa compra parcelada, digite o valor total. As parcelas são lançadas uma em cada mês, até {{ maximo_parcelas }}x.
+      </p>
+    {% elif parcela %}
+      <p class="ajuda">Esta é a parcela {{ parcela }} de uma compra parcelada.</p>
+    {% endif %}
+
+    {% if contas %}
+      <label class="campo">Conta ou cartão
+        <select name="conta">
+          <option value="">Nenhuma</option>
+          {% for c in contas %}
+            <option value="{{ c.id }}"{{ " selected" if c.id == campos.conta }}>{{ c.nome }}</option>
           {% endfor %}
         </select>
       </label>
-    {% endfor %}
-
-    <label class="campo">Data
-      <input type="date" name="data" value="{{ campos.data }}">
-    </label>
-
-    {% if not editando %}
-      <label class="opcao"><input type="checkbox" name="repetir"{{ " checked" if campos.repetir }}> Repetir todo mês</label>
-    {% elif recorrente %}
-      <label class="opcao"><input type="checkbox" name="proximos"> Aplicar as mudanças também aos próximos meses</label>
     {% endif %}
 
-    <button class="botao" type="submit">Salvar</button>
+    <div class="opcoes">
+      <label class="opcao so-despesa">
+        <input type="checkbox" name="pendente"{{ " checked" if campos.pendente }}>
+        <span>Ainda não paguei<span class="opcao-ajuda">Fica em Contas a pagar e só entra no saldo quando você marcar como paga.</span></span>
+      </label>
+      {% if not editando %}
+        <label class="opcao">
+          <input type="checkbox" name="repetir"{{ " checked" if campos.repetir }}>
+          <span>Repetir todo mês<span class="opcao-ajuda">Para salário, aluguel, assinaturas...</span></span>
+        </label>
+      {% elif recorrente %}
+        <label class="opcao">
+          <input type="checkbox" name="proximos">
+          <span>Aplicar as mudanças também aos próximos meses</span>
+        </label>
+      {% endif %}
+    </div>
+
+    <button class="botao botao-largo" type="submit">Salvar</button>
   </form>
 
   {% if editando %}
-    <form class="cartao" method="post" action="{{ url_for('remover', indice=indice) }}"
-          onsubmit="return confirm('Remover este lançamento?')">
+    <form class="remover" method="post" action="{{ url_for('remover', indice=indice) }}">
       <input type="hidden" name="c" value="{{ chave }}">
       <input type="hidden" name="voltar" value="{{ voltar }}">
       {% if recorrente %}
-        <label class="opcao"><input type="checkbox" name="parar"> Parar de criá-lo nos próximos meses</label>
+        <label class="opcao"><input type="checkbox" name="parar"> <span>Parar de criá-lo nos próximos meses</span></label>
       {% endif %}
-      <button class="botao perigo" type="submit">Remover lançamento</button>
+      {% if parcela %}
+        <label class="opcao"><input type="checkbox" name="seguintes"> <span>Remover também as próximas parcelas</span></label>
+      {% endif %}
+      <button class="botao perigo botao-largo" type="submit">Remover lançamento</button>
     </form>
   {% endif %}
 {% endblock %}

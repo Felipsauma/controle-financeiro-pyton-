@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% block classe %}pagina-inicio{% endblock %}
+{% from "_macros.html" import dinheiro, lista_por_dia with context %}
 {% set aqui = mes or "todos" %}
+{% set periodo = "no mês" if mes else "no total" %}
+{% set nome_do_mes = formatar_mes(mes).split(" ")[0]|lower if mes else "" %}
 
 {% block topo %}
   {% if mes %}
@@ -7,87 +11,99 @@
     <h1>{{ formatar_mes(mes) }}</h1>
     <a class="seta" href="{{ url_for('inicio', mes=seguinte) }}" aria-label="Próximo mês">›</a>
   {% else %}
+    <span class="espaco"></span>
     <h1>Todos os meses</h1>
+    <span class="espaco"></span>
   {% endif %}
+  {# Só no computador: trocar de período e lançar, no próprio topo #}
+  <div class="topo-acoes">
+    {% if mes %}<a href="{{ url_for('inicio', mes='todos') }}">Ver todos os meses</a>
+    {% else %}<a href="{{ url_for('inicio') }}">Voltar ao mês atual</a>{% endif %}
+    <a class="botao-pequeno despesa" href="{{ url_for('novo', tipo='despesa', voltar=aqui) }}">− Despesa</a>
+    <a class="botao-pequeno receita" href="{{ url_for('novo', tipo='receita', voltar=aqui) }}">+ Receita</a>
+  </div>
 {% endblock %}
 
 {% block conteudo %}
-  <div class="periodo">
+<div class="inicio">
+
+  <section class="nota{{ ' negativa' if saldo < 0 }}" aria-labelledby="titulo-saldo">
+    <h2 id="titulo-saldo" class="nota-titulo">Saldo atual</h2>
+    <p class="nota-valor">{{ dinheiro(saldo, saldo=true) }}</p>
+    {% if previsto != saldo %}
+      <p class="nota-previsto">Com os agendados e as contas a pagar, fica {{ formatar_saldo(previsto) }}</p>
+    {% endif %}
+    {% if guardado %}
+      <p class="nota-previsto">
+        <a href="{{ url_for('cofrinho') }}">{{ formatar_reais(guardado) }} guardados</a>,
+        {{ formatar_saldo(saldo - guardado) }} livres para gastar
+      </p>
+    {% endif %}
+    <dl class="nota-resumo">
+      <div>
+        <dt>Receitas {{ periodo }}</dt>
+        <dd class="receita">{{ formatar_reais(totais.receita) }}</dd>
+      </div>
+      <div>
+        <dt>Despesas {{ periodo }}</dt>
+        <dd class="despesa">{{ formatar_reais(totais.despesa) }}</dd>
+      </div>
+    </dl>
+    {% if variacao_despesas is not none %}
+      {% set mes_passado = formatar_mes(anterior).split(" ")[0]|lower %}
+      <p class="nota-comparacao">
+        {% if variacao_despesas >= 0.5 %}Você gastou {{ formatar_variacao(variacao_despesas) }} a mais que em {{ mes_passado }}.
+        {% elif variacao_despesas <= -0.5 %}Você gastou {{ formatar_variacao(variacao_despesas) }} a menos que em {{ mes_passado }}.
+        {% else %}Você gastou o mesmo que em {{ mes_passado }}.{% endif %}
+      </p>
+    {% endif %}
+  </section>
+
+  <p class="periodo">
     {% if mes %}<a href="{{ url_for('inicio', mes='todos') }}">Ver todos os meses</a>
     {% else %}<a href="{{ url_for('inicio') }}">Voltar ao mês atual</a>{% endif %}
-  </div>
+  </p>
 
-  {% set periodo = "no mês" if mes else "(todo o período)" %}
-  <section class="cartao">
-    <div class="rotulo">Saldo atual</div>
-    <div class="grande{{ ' negativo' if saldo < 0 }}">{{ formatar_saldo(saldo) }}</div>
-    {% if previsto != saldo %}
-      <div class="suave pequeno">Com os agendados: {{ formatar_saldo(previsto) }}</div>
-    {% endif %}
-    <div class="resumo">
-      <div>
-        <div class="rotulo">Receitas {{ periodo }}</div>
-        <div class="valor-resumo receita">{{ formatar_reais(totais.receita) }}</div>
+  {% if resumo %}
+    {# Livro-caixa do mês: só no computador (no celular a cédula já resume) #}
+    <section class="painel-inicio livro-caixa" aria-labelledby="titulo-resumo">
+      <h2 id="titulo-resumo">Resumo de {{ nome_do_mes }}</h2>
+      <dl>
+        <div>
+          <dt>{{ "Sobrou" if resumo.sobra >= 0 else "Faltou" }}</dt>
+          <dd class="{{ 'receita' if resumo.sobra >= 0 else 'despesa' }}">{{ formatar_reais(resumo.sobra|abs) }}</dd>
+        </div>
+        <div>
+          <dt>Da receita, você guardou</dt>
+          <dd>{{ (resumo.guardado|round|int ~ "%") if resumo.guardado is not none else "nada" }}</dd>
+        </div>
+        <div>
+          <dt>Gasto médio por dia</dt>
+          <dd>{{ formatar_reais(resumo.por_dia) if resumo.por_dia is not none else "ainda não começou" }}</dd>
+        </div>
+        <div>
+          <dt>Maior despesa</dt>
+          <dd>
+            {% if resumo.maior %}{{ formatar_reais(resumo.maior.valor) }}
+              <span class="livro-caixa-detalhe">{{ resumo.maior.descricao }}</span>
+            {% else %}nenhuma{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt>Lançamentos no mês</dt>
+          <dd>{{ resumo.quantidade }}</dd>
+        </div>
+      </dl>
+    </section>
+  {% endif %}
+
+  <section class="bloco bloco-evolucao painel-inicio" aria-labelledby="titulo-evolucao">
+    <div class="bloco-cabeca">
+      <h2 id="titulo-evolucao">Últimos 6 meses</h2>
+      <div class="legenda">
+        <span><span class="ponto receita"></span>Receitas</span>
+        <span><span class="ponto despesa"></span>Despesas</span>
       </div>
-      <div>
-        <div class="rotulo">Despesas {{ periodo }}</div>
-        <div class="valor-resumo despesa">{{ formatar_reais(totais.despesa) }}</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="cartao">
-    <div class="cabecalho-cartao">
-      <h2>Despesas por categoria</h2>
-      <a href="{{ url_for('orcamentos') }}">Orçamentos</a>
-    </div>
-    {% if not mes %}
-      <p class="suave pequeno">Escolha um mês para comparar com o orçamento.</p>
-    {% endif %}
-    {% for b in barras %}
-      <div class="barra {{ b.situacao }}" style="--cor: {{ b.cor }}">
-        <div class="barra-linha"><strong>{{ b.nome }}</strong><span>{{ b.texto }}</span></div>
-        <div class="trilho"><div class="preenchido" style="width: {{ b.largura }}%"></div></div>
-      </div>
-    {% else %}
-      <p class="vazio">Nenhuma despesa neste período.</p>
-    {% endfor %}
-  </section>
-
-  <section class="cartao">
-    <div class="cabecalho-cartao">
-      <h2>Lançamentos</h2>
-      <a href="{{ url_for('exportar', mes=aqui) }}">Exportar</a>
-    </div>
-    <form class="busca" method="get" action="{{ url_for('inicio') }}" role="search">
-      <input type="hidden" name="mes" value="{{ aqui }}">
-      <input type="search" name="q" value="{{ busca }}" placeholder="Buscar descrição ou categoria"
-             autocomplete="off" aria-label="Buscar">
-    </form>
-    {% for item in itens %}
-      {% if loop.changed(item.l.data) %}<div class="dia">{{ rotulo_dia(item.l.data) }}</div>{% endif %}
-      <a class="item{{ ' futuro' if item.futuro }}"
-         href="{{ url_for('editar', indice=item.indice, c=item.chave, voltar=aqui) }}">
-        <span class="item-texto">
-          <span class="descricao">{% if item.l.recorrente %}↻ {% endif %}{{ item.l.descricao }}</span>
-          <span class="categoria">{{ item.l.categoria }}{% if item.futuro %} · agendado{% endif %}</span>
-        </span>
-        <span class="valor {{ item.l.tipo }}">{{ "+" if item.l.tipo == "receita" else "−" }} {{ formatar_reais(item.l.valor) }}</span>
-      </a>
-    {% else %}
-      <p class="vazio">
-        {% if busca %}Nada encontrado para "{{ busca }}".
-        {% elif mes %}Nenhum lançamento neste mês.
-        {% else %}Nenhum lançamento ainda.{% endif %}
-      </p>
-    {% endfor %}
-  </section>
-
-  <section class="cartao">
-    <h2>Últimos 6 meses</h2>
-    <div class="legenda">
-      <span><span class="ponto receita"></span>Receitas</span>
-      <span><span class="ponto despesa"></span>Despesas</span>
     </div>
     <div class="grafico">
       {% for m in evolucao %}
@@ -102,12 +118,176 @@
       {% endfor %}
     </div>
   </section>
+
+  <section class="bloco bloco-categorias painel-inicio" aria-labelledby="titulo-categorias">
+    <div class="bloco-cabeca">
+      <h2 id="titulo-categorias">Para onde foi o dinheiro</h2>
+      <a href="{{ url_for('orcamentos') }}">Orçamentos</a>
+    </div>
+    {% if fatias %}
+      <div class="rosca">
+        <svg viewBox="0 0 42 42" role="img" aria-label="Despesas por categoria">
+          <circle class="rosca-fundo" cx="21" cy="21" r="15.9155"></circle>
+          {% for f in fatias %}
+            <circle cx="21" cy="21" r="15.9155" stroke="{{ f.cor }}"
+                    stroke-dasharray="{{ f.traco }} {{ f.resto }}" stroke-dashoffset="{{ f.deslocamento }}">
+              <title>{{ f.nome }}</title>
+            </circle>
+          {% endfor %}
+        </svg>
+        <div class="rosca-centro">
+          <span class="rosca-rotulo">Despesas</span>
+          <span class="rosca-total">{{ dinheiro(totais.despesa) }}</span>
+        </div>
+      </div>
+    {% endif %}
+    {% if not mes %}
+      <p class="suave pequeno">Escolha um mês para comparar com o orçamento.</p>
+    {% endif %}
+    <ul class="categorias-lista">
+      {% for b in barras %}
+        <li class="categoria-linha {{ b.situacao }}" style="--cor: {{ b.cor }}">
+          <span class="icone" aria-hidden="true">{{ b.icone }}</span>
+          <div class="categoria-corpo">
+            <div class="categoria-topo">
+              <strong>{{ b.nome }}</strong>
+              <span class="valor">{{ formatar_reais(b.gasto) }}</span>
+            </div>
+            <div class="trilho"><div class="preenchido" style="width: {{ b.largura }}%"></div></div>
+            <div class="categoria-rodape">
+              <span>{{ b.texto }}</span>
+              {% if b.aviso %}
+                <span class="aviso-orcamento">{{ b.aviso }}</span>
+              {% elif b.variacao is not none and b.variacao|abs >= 1 %}
+                <span class="variacao {{ 'subiu' if b.variacao > 0 else 'caiu' }}">
+                  {{ "▲" if b.variacao > 0 else "▼" }} {{ formatar_variacao(b.variacao) }}
+                  <span class="sr">{{ "a mais" if b.variacao > 0 else "a menos" }} que no mês anterior</span>
+                </span>
+              {% endif %}
+            </div>
+          </div>
+        </li>
+      {% else %}
+        <li class="vazio">Nenhuma despesa neste período.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="bloco bloco-lancamentos painel-inicio" aria-labelledby="titulo-lancamentos">
+    <div class="bloco-cabeca">
+      <h2 id="titulo-lancamentos">Lançamentos</h2>
+      <a href="{{ url_for('exportar', mes=aqui) }}">Exportar</a>
+    </div>
+    <form class="busca" method="get" action="{{ url_for('inicio') }}" role="search">
+      <input type="hidden" name="mes" value="{{ aqui }}">
+      <input type="search" name="q" value="{{ busca }}" placeholder="Buscar descrição ou categoria"
+             autocomplete="off" aria-label="Buscar">
+    </form>
+    {% if itens %}
+      {{ lista_por_dia(itens, aqui) }}
+    {% else %}
+      <p class="vazio">
+        {% if busca %}Nada encontrado para "{{ busca }}".
+        {% elif mes %}Nenhum lançamento neste mês. Use os botões de Despesa e Receita para lançar.
+        {% else %}Nenhum lançamento ainda. Use os botões de Despesa e Receita para lançar o primeiro.{% endif %}
+      </p>
+    {% endif %}
+  </section>
+
+  {# Coluna da direita no computador: o que pede atenção #}
+  <div class="pilha">
+    <section class="bloco bloco-pagar painel-inicio{{ ' sem-itens' if not a_pagar }}" aria-labelledby="titulo-pagar">
+      <div class="bloco-cabeca">
+        <h2 id="titulo-pagar">Contas a pagar</h2>
+        <a href="{{ url_for('pagar') }}">Ver todas ({{ total_pendentes }})</a>
+      </div>
+      {% if a_pagar %}
+        <div class="lista">
+          {% for item in a_pagar %}
+            <div class="conta-a-pagar{{ ' atrasada' if item.atrasado }}">
+              <span class="icone" style="--cor: {{ item.cor }}" aria-hidden="true">{{ item.icone }}</span>
+              <a class="item-texto" href="{{ url_for('editar', indice=item.indice, c=item.chave, voltar=aqui) }}">
+                <span class="descricao">{{ item.l.descricao }}</span>
+                <span class="meta"><span class="vencimento">{{ quando_vence(item.l.data) }}</span></span>
+              </a>
+              <span class="valor despesa">{{ formatar_reais(item.l.valor) }}</span>
+              <form method="post" action="{{ url_for('marcar_como_pago', indice=item.indice) }}">
+                <input type="hidden" name="c" value="{{ item.chave }}">
+                <input type="hidden" name="voltar" value="{{ aqui }}">
+                <button class="botao-pequeno" type="submit">Paguei</button>
+              </form>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="vazio">Nada vencendo nos próximos 7 dias.</p>
+      {% endif %}
+    </section>
+
+    <section class="bloco bloco-cartoes painel-inicio{{ ' sem-itens' if not cartoes }}" aria-labelledby="titulo-cartoes">
+      <div class="bloco-cabeca">
+        <h2 id="titulo-cartoes">Cartões</h2>
+        <a href="{{ url_for('contas') }}">{{ "Ver todos" if cartoes else "Cadastrar" }}</a>
+      </div>
+      {% if cartoes %}
+        <div class="lista">
+          {% for c in cartoes %}
+            <a class="item" href="{{ url_for('conta', identificador=c.conta.id) }}">
+              <span class="icone icone-cartao" aria-hidden="true">💳</span>
+              <span class="item-texto">
+                <span class="descricao">{{ c.conta.nome }}</span>
+                <span class="meta">Fatura de {{ formatar_mes(c.fatura.mes).split(" ")[0]|lower }}, vence {{ formatar_data(c.fatura.vencimento.isoformat())[:5] }}</span>
+              </span>
+              <span class="valor">{{ formatar_reais(c.fatura.total) }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="vazio">Cadastre um cartão para acompanhar a fatura.</p>
+      {% endif %}
+    </section>
+
+    <section class="bloco bloco-cofrinho painel-inicio{{ ' sem-itens' if not no_cofrinho }}" aria-labelledby="titulo-cofrinho">
+      <div class="bloco-cabeca">
+        <h2 id="titulo-cofrinho">Cofrinho</h2>
+        <a href="{{ url_for('cofrinho') }}">{{ "Guardar mais" if no_cofrinho else "Começar a guardar" }}</a>
+      </div>
+      <a class="cofrinho-curto" href="{{ url_for('cofrinho') }}">
+        <span class="moeda moeda-pequena" aria-hidden="true"><span class="moeda-miolo">🐷</span></span>
+        <span class="item-texto">
+          <span class="descricao">{{ formatar_reais(no_cofrinho) }}</span>
+          <span class="meta">{{ "guardados no cofrinho" if no_cofrinho else "Separe um dinheiro quando sobrar" }}</span>
+        </span>
+      </a>
+    </section>
+
+    <section class="bloco bloco-metas painel-inicio{{ ' sem-itens' if not metas }}" aria-labelledby="titulo-metas">
+      <div class="bloco-cabeca">
+        <h2 id="titulo-metas">Metas</h2>
+        <a href="{{ url_for('metas') }}">{{ "Guardar dinheiro" if metas else "Criar uma meta" }}</a>
+      </div>
+      {% for item in metas %}
+        <a class="meta-curta" href="{{ url_for('metas') }}">
+          <span class="meta-curta-topo">
+            <span class="descricao">{{ item.meta.nome }}</span>
+            <span class="suave">{{ item.porcentagem|round|int }}%</span>
+          </span>
+          <span class="trilho trilho-meta"><span class="preenchido" style="width: {{ item.porcentagem|round(1) }}%"></span></span>
+          <span class="meta">{{ formatar_reais(item.meta.guardado) }} de {{ formatar_reais(item.meta.alvo) }}</span>
+        </a>
+      {% else %}
+        <p class="vazio">Junte dinheiro para uma viagem, uma reserva ou uma compra.</p>
+      {% endfor %}
+    </section>
+  </div>
+
+</div>
 {% endblock %}
 
 {% block rodape %}
-  <nav class="acoes">
+  <nav class="acoes" aria-label="Lançar">
     <a class="botao despesa" href="{{ url_for('novo', tipo='despesa', voltar=aqui) }}">− Despesa</a>
     <a class="botao receita" href="{{ url_for('novo', tipo='receita', voltar=aqui) }}">+ Receita</a>
-    <a class="botao secundario" href="{{ url_for('mais') }}" aria-label="Mais opções">•••</a>
+    <a class="botao secundario" href="{{ url_for('mais') }}">Mais</a>
   </nav>
 {% endblock %}

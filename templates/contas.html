@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo, dinheiro with context %}
+
+{% block titulo %}Contas e cartões{% endblock %}
+{% block topo %}{{ topo("Contas e cartões", url_for('mais'), "Mais") }}{% endblock %}
+
+{% block conteudo %}
+  {% if lista %}
+    <div class="lista">
+      {% for item in lista %}
+        {% set c = item.conta %}
+        <a class="item" href="{{ url_for('conta', identificador=c.id) }}">
+          <span class="icone icone-cartao" aria-hidden="true">{{ "💳" if c.tipo == "cartao" else ("💵" if c.tipo == "dinheiro" else "🏦") }}</span>
+          <span class="item-texto">
+            <span class="descricao">{{ c.nome }}</span>
+            <span class="meta">
+              {% if c.tipo == "cartao" %}
+                Fatura fecha dia {{ c.fechamento }} e vence dia {{ c.vencimento }}
+                {%- if item.disponivel is not none %}, {{ formatar_reais(item.disponivel) }} de limite livre{% endif %}
+              {% else %}
+                {{ item.nome_do_tipo }}
+              {% endif %}
+            </span>
+          </span>
+          {% if c.tipo == "cartao" %}
+            <span class="valor">{{ formatar_reais(item.fatura.total) }}</span>
+          {% else %}
+            <span class="valor{{ ' negativo' if item.saldo < 0 }}">{{ formatar_saldo(item.saldo) }}</span>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+    <p class="ajuda">
+      O saldo de cada conta soma só os lançamentos em que ela foi escolhida. No cartão, o valor é a fatura aberta.
+    </p>
+  {% else %}
+    <p class="introducao">
+      Separe seus lançamentos por conta corrente, dinheiro ou cartão de crédito. No cartão, o programa
+      calcula a fatura de cada mês a partir do dia em que ela fecha.
+    </p>
+  {% endif %}
+
+  <form class="formulario painel" method="post">
+    <h2>Nova conta ou cartão</h2>
+    {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+    <label class="campo">Nome
+      <input name="nome" value="{{ campos.nome }}" placeholder="Ex: Nubank, Carteira" maxlength="30" required>
+    </label>
+    <fieldset class="chips">
+      <legend>Tipo</legend>
+      {% for valor, nome in tipos.items() %}
+        <label class="chip">
+          <input type="radio" name="tipo" value="{{ valor }}" id="tipo-conta-{{ valor }}"{{ " checked" if campos.tipo == valor }}>
+          <span>{{ nome }}</span>
+        </label>
+      {% endfor %}
+    </fieldset>
+    <div class="so-cartao">
+      <div class="campos-lado-a-lado">
+        <label class="campo">Dia em que a fatura fecha
+          <input name="fechamento" value="{{ campos.fechamento }}" inputmode="numeric" placeholder="Ex: 3">
+        </label>
+        <label class="campo">Dia do vencimento
+          <input name="vencimento" value="{{ campos.vencimento }}" inputmode="numeric" placeholder="Ex: 10">
+        </label>
+      </div>
+      <label class="campo">Limite (opcional)
+        <input name="limite" value="{{ campos.limite }}" inputmode="decimal" placeholder="Ex: 2.000">
+      </label>
+    </div>
+    <button class="botao botao-largo" type="submit">Criar</button>
+  </form>
+{% endblock %}
