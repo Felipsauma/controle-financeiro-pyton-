@@ -1,0 +1,49 @@
+{# Pedaços repetidos nas páginas #}
+
+{# Valor em reais com os centavos menores: R$ 1.234,56
+   (a vírgula fica no tamanho grande: pequena, no Bodoni, ela parece um ponto) #}
+{% macro dinheiro(valor, saldo=false) -%}
+  {%- set texto = formatar_saldo(valor) if saldo else formatar_reais(valor) -%}
+  {%- set inteiro, centavos = texto.rsplit(",", 1) -%}
+  <span class="dinheiro"><span class="dinheiro-inteiro">{{ inteiro }},</span><span class="dinheiro-centavos">{{ centavos }}</span></span>
+{%- endmacro %}
+
+{# Topo das páginas internas: voltar + título #}
+{% macro topo(titulo, destino, texto_voltar="Voltar") -%}
+  <a class="voltar" href="{{ destino }}">‹ {{ texto_voltar }}</a>
+  <h1>{{ titulo }}</h1>
+  <span class="espaco"></span>
+{%- endmacro %}
+
+{# Uma linha da lista de lançamentos #}
+{% macro lancamento(item, voltar) -%}
+  <a class="item{{ ' futuro' if item.futuro }}{{ ' pendente' if item.pendente }}"
+     href="{{ url_for('editar', indice=item.indice, c=item.chave, voltar=voltar) }}">
+    <span class="icone" style="--cor: {{ item.cor }}" aria-hidden="true">{{ item.icone }}</span>
+    <span class="item-texto">
+      <span class="descricao">{{ item.l.descricao }}</span>
+      <span class="meta">
+        <span>{{ item.l.categoria }}</span>
+        {%- if item.atrasado %}<span class="etiqueta etiqueta-perigo">atrasada</span>
+        {%- elif item.pendente %}<span class="etiqueta etiqueta-alerta">a pagar</span>
+        {%- elif item.futuro %}<span class="etiqueta">agendado</span>{% endif %}
+        {%- if item.l.recorrente %}<span class="etiqueta">todo mês</span>{% endif %}
+        {%- if item.conta %}<span class="etiqueta">{{ item.conta }}</span>{% endif %}
+      </span>
+    </span>
+    <span class="valor {{ item.l.tipo }}">{{ "+" if item.l.tipo == "receita" else "−" }} {{ formatar_reais(item.l.valor) }}</span>
+  </a>
+{%- endmacro %}
+
+{# Lista de lançamentos com o dia como título de cada grupo #}
+{% macro lista_por_dia(itens, voltar) -%}
+  {% for item in itens %}
+    {% if loop.changed(item.l.data) %}
+      {% if not loop.first %}</div>{% endif %}
+      <h3 class="dia">{{ rotulo_dia(item.l.data) }}</h3>
+      <div class="lista">
+    {% endif %}
+    {{ lancamento(item, voltar) }}
+    {% if loop.last %}</div>{% endif %}
+  {% endfor %}
+{%- endmacro %}

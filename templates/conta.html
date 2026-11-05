@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo, dinheiro, lista_por_dia with context %}
+
+{% block titulo %}{{ conta.nome }}{% endblock %}
+{% block topo %}{{ topo(conta.nome, url_for('contas'), "Contas") }}{% endblock %}
+
+{% block conteudo %}
+  {% if fatura %}
+    <nav class="navegar-fatura" aria-label="Escolher fatura">
+      <a class="seta" href="{{ url_for('conta', identificador=conta.id, fatura=anterior) }}" aria-label="Fatura anterior">‹</a>
+      <span>Fatura de {{ formatar_mes(fatura.mes)|lower }}</span>
+      <a class="seta" href="{{ url_for('conta', identificador=conta.id, fatura=seguinte) }}" aria-label="Próxima fatura">›</a>
+    </nav>
+    <section class="resumo-conta">
+      <p class="resumo-valor">{{ dinheiro(fatura.total) }}</p>
+      <p class="suave">
+        Fecha em {{ formatar_data(fatura.fechamento.isoformat()) }} e vence em {{ formatar_data(fatura.vencimento.isoformat()) }}.
+        {% if disponivel is not none %}<br>Limite livre agora: {{ formatar_reais(disponivel) }} de {{ formatar_reais(conta.limite) }}.{% endif %}
+      </p>
+    </section>
+  {% else %}
+    <section class="resumo-conta">
+      <p class="suave">Saldo</p>
+      <p class="resumo-valor{{ ' negativo' if saldo < 0 }}">{{ dinheiro(saldo, saldo=true) }}</p>
+    </section>
+  {% endif %}
+
+  <section class="bloco">
+    {% if itens %}
+      {{ lista_por_dia(itens, "todos") }}
+    {% else %}
+      <p class="vazio">
+        {% if fatura %}Nenhuma compra nesta fatura.{% else %}Nenhum lançamento nesta conta.{% endif %}
+        Escolha "{{ conta.nome }}" no campo Conta ou cartão ao lançar.
+      </p>
+    {% endif %}
+  </section>
+
+  <form method="post" action="{{ url_for('remover_conta_web', identificador=conta.id) }}"
+        onsubmit="return confirm('Remover esta conta? Os lançamentos dela continuam na lista.')">
+    <button class="botao perigo botao-largo" type="submit">Remover {{ conta.nome }}</button>
+  </form>
+{% endblock %}

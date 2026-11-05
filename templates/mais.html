@@ -1,48 +1,93 @@
 {% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
 
-{% block topo %}
-  <a class="voltar" href="{{ url_for('inicio') }}">‹ Início</a>
-  <h1>Mais</h1>
-  <span class="espaco"></span>
-{% endblock %}
+{% block titulo %}Mais{% endblock %}
+{% block topo %}{{ topo("Mais", url_for('inicio'), "Início") }}{% endblock %}
 
 {% block conteudo %}
-  <nav class="cartao menu">
-    <a class="linha" href="{{ url_for('orcamentos') }}">
-      <span class="linha-texto">Orçamentos<span class="categoria">Limite mensal por categoria</span></span>
-    </a>
-    <a class="linha" href="{{ url_for('recorrentes') }}">
-      <span class="linha-texto">Lançamentos recorrentes
-        <span class="categoria">{{ recorrentes }} se repetindo todo mês</span></span>
-    </a>
-    <a class="linha" href="{{ url_for('categorias') }}">
-      <span class="linha-texto">Categorias<span class="categoria">Criar ou remover</span></span>
-    </a>
-    <a class="linha" href="{{ url_for('exportar', mes='todos') }}">
-      <span class="linha-texto">Exportar tudo para o Excel<span class="categoria">Arquivo CSV</span></span>
-    </a>
+  <nav class="menu" aria-label="Opções">
+    <h2 class="menu-grupo">Planejar</h2>
+    <div class="lista">
+      <a class="item" href="{{ url_for('pagar') }}">
+        <span class="icone icone-menu" aria-hidden="true">🧾</span>
+        <span class="item-texto"><span class="descricao">Contas a pagar</span>
+          <span class="meta">{{ pendentes or "Nenhuma" }} esperando pagamento</span></span>
+      </a>
+      <a class="item" href="{{ url_for('cofrinho') }}">
+        <span class="icone icone-menu" aria-hidden="true">🐷</span>
+        <span class="item-texto"><span class="descricao">Cofrinho</span>
+          <span class="meta">{% if no_cofrinho %}{{ formatar_reais(no_cofrinho) }} guardados{% else %}Separe dinheiro quando quiser{% endif %}</span></span>
+      </a>
+      <a class="item" href="{{ url_for('metas') }}">
+        <span class="icone icone-menu" aria-hidden="true">🎯</span>
+        <span class="item-texto"><span class="descricao">Metas</span>
+          <span class="meta">{% if metas %}{{ metas }} meta(s) em andamento{% else %}Junte dinheiro para algo{% endif %}</span></span>
+      </a>
+      <a class="item" href="{{ url_for('orcamentos') }}">
+        <span class="icone icone-menu" aria-hidden="true">📏</span>
+        <span class="item-texto"><span class="descricao">Orçamentos</span>
+          <span class="meta">Limite mensal por categoria</span></span>
+      </a>
+      <a class="item" href="{{ url_for('recorrentes') }}">
+        <span class="icone icone-menu" aria-hidden="true">🔁</span>
+        <span class="item-texto"><span class="descricao">Lançamentos recorrentes</span>
+          <span class="meta">{{ recorrentes }} se repetindo todo mês</span></span>
+      </a>
+    </div>
+
+    <h2 class="menu-grupo">Organizar</h2>
+    <div class="lista">
+      <a class="item" href="{{ url_for('contas') }}">
+        <span class="icone icone-menu" aria-hidden="true">💳</span>
+        <span class="item-texto"><span class="descricao">Contas e cartões</span>
+          <span class="meta">{% if contas %}{{ contas }} cadastrada(s){% else %}Conta corrente, dinheiro, cartão de crédito{% endif %}</span></span>
+      </a>
+      <a class="item" href="{{ url_for('categorias') }}">
+        <span class="icone icone-menu" aria-hidden="true">🏷️</span>
+        <span class="item-texto"><span class="descricao">Categorias</span>
+          <span class="meta">Criar, remover e trocar ícones</span></span>
+      </a>
+    </div>
+
+    <h2 class="menu-grupo">Arquivos</h2>
+    <div class="lista">
+      <a class="item" href="{{ url_for('importar') }}">
+        <span class="icone icone-menu" aria-hidden="true">📥</span>
+        <span class="item-texto"><span class="descricao">Importar extrato do banco</span>
+          <span class="meta">Arquivo OFX ou CSV</span></span>
+      </a>
+      <a class="item" href="{{ url_for('exportar', mes='todos') }}">
+        <span class="icone icone-menu" aria-hidden="true">📤</span>
+        <span class="item-texto"><span class="descricao">Exportar tudo para o Excel</span>
+          <span class="meta">Arquivo CSV</span></span>
+      </a>
+    </div>
   </nav>
 
-  <section class="cartao">
-    <div class="cabecalho-cartao"><h2>Resumo por mês</h2></div>
+  <section class="bloco">
+    <h2>Resumo por mês</h2>
     {% if meses %}
-      <table>
-        <tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr>
-        {% for m in meses %}
-          <tr>
-            <td><a href="{{ url_for('inicio', mes=m.mes) }}">{{ formatar_mes_curto(m.mes) }}</a></td>
-            <td class="receita">{{ formatar_reais(m.receita) }}</td>
-            <td class="despesa">{{ formatar_reais(m.despesa) }}</td>
-            <td{{ ' class=negativo' if m.saldo < 0 }}>{{ formatar_saldo(m.saldo) }}</td>
-          </tr>
-        {% endfor %}
+      <table class="tabela">
+        <thead><tr><th scope="col">Mês</th><th scope="col">Receitas</th><th scope="col">Despesas</th><th scope="col">Saldo</th></tr></thead>
+        <tbody>
+          {% for m in meses %}
+            <tr>
+              <th scope="row"><a href="{{ url_for('inicio', mes=m.mes) }}">{{ formatar_mes_curto(m.mes) }}</a></th>
+              <td class="receita">{{ formatar_reais(m.receita) }}</td>
+              <td class="despesa">{{ formatar_reais(m.despesa) }}</td>
+              <td{{ ' class=negativo' if m.saldo < 0 }}>{{ formatar_saldo(m.saldo) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
       </table>
     {% else %}
       <p class="vazio">Nenhum lançamento ainda.</p>
     {% endif %}
   </section>
 
+  <p class="ajuda">Uma cópia dos dados é guardada todo dia na pasta "backups", ao lado do programa (os últimos 30 dias).</p>
+
   <form method="post" action="{{ url_for('sair') }}">
-    <button class="botao secundario" type="submit">Sair (pedir a senha de novo)</button>
+    <button class="botao secundario botao-largo" type="submit">Sair (pedir a senha de novo)</button>
   </form>
 {% endblock %}

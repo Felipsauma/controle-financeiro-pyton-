@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
+
+{% block titulo %}Importar extrato{% endblock %}
+{% block topo %}{{ topo("Importar extrato", url_for('mais'), "Mais") }}{% endblock %}
+
+{% block conteudo %}
+  <p class="introducao">
+    Baixe o extrato no aplicativo ou no site do banco, em <strong>OFX</strong> ou <strong>CSV</strong>, e envie aqui.
+    Antes de salvar, você confere cada lançamento e escolhe as categorias.
+  </p>
+  {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+  <form class="formulario painel" method="post" enctype="multipart/form-data">
+    <label class="campo">Arquivo do extrato
+      <input type="file" name="extrato" accept=".ofx,.csv,.txt" required>
+    </label>
+    {% if contas %}
+      <label class="campo">De qual conta ou cartão?
+        <select name="conta">
+          <option value="">Nenhuma</option>
+          {% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+        </select>
+      </label>
+    {% endif %}
+    <label class="opcao">
+      <input type="checkbox" name="inverter">
+      <span>É a fatura de um cartão<span class="opcao-ajuda">Na fatura, os gastos costumam vir como valores positivos. Marque para eles entrarem como despesas.</span></span>
+    </label>
+    <button class="botao botao-largo" type="submit">Ler o arquivo</button>
+  </form>
+{% endblock %}

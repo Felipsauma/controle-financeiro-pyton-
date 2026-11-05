@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo, dinheiro with context %}
+
+{% block titulo %}Metas{% endblock %}
+{% block topo %}{{ topo("Metas", url_for('mais'), "Mais") }}{% endblock %}
+
+{% block conteudo %}
+  {% if not lista %}
+    <p class="introducao">
+      Junte dinheiro para algo: uma viagem, uma reserva de emergência, um celular novo.
+      Diga quanto quer juntar e, se quiser, até quando. O programa mostra quanto falta e quanto guardar por mês.
+    </p>
+  {% endif %}
+
+  {% for item in lista %}
+    {% set m = item.meta %}
+    <section class="meta-economia{{ ' alcancada' if not item.falta }}">
+      <div class="meta-cabeca">
+        <h2>{{ m.nome }}</h2>
+        {% if m.prazo %}<span class="suave pequeno">até {{ formatar_mes(m.prazo)|lower }}</span>{% endif %}
+      </div>
+      <p class="meta-valores">
+        {{ dinheiro(m.guardado) }}
+        <span class="suave">de {{ formatar_reais(m.alvo) }}</span>
+      </p>
+      <div class="trilho trilho-meta" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+           aria-valuenow="{{ item.porcentagem|round|int }}" aria-label="Progresso de {{ m.nome }}">
+        <div class="preenchido" style="width: {{ item.porcentagem|round(1) }}%"></div>
+      </div>
+      <p class="meta-situacao">
+        {% if not item.falta %}Meta alcançada.
+        {% elif item.por_mes %}Faltam {{ formatar_reais(item.falta) }}. Guardando {{ formatar_reais(item.por_mes) }} por mês, você chega lá no prazo.
+        {% elif m.prazo %}Faltam {{ formatar_reais(item.falta) }} e o prazo já passou.
+        {% else %}Faltam {{ formatar_reais(item.falta) }}.{% endif %}
+      </p>
+      <form class="meta-acoes" method="post" action="{{ url_for('movimentar', identificador=m.id) }}">
+        <input name="valor" inputmode="decimal" placeholder="Valor" aria-label="Valor para {{ m.nome }}" autocomplete="off">
+        <button class="botao-pequeno" type="submit" name="acao" value="guardar">Guardar</button>
+        <button class="botao-pequeno secundario" type="submit" name="acao" value="retirar">Retirar</button>
+      </form>
+      <form method="post" action="{{ url_for('movimentar', identificador=m.id) }}"
+            onsubmit="return confirm('Remover esta meta?')">
+        <button class="botao-texto perigo-texto" type="submit" name="acao" value="remover">Remover meta</button>
+      </form>
+    </section>
+  {% endfor %}
+
+  <form class="formulario painel" method="post">
+    <h2>Nova meta</h2>
+    {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+    <label class="campo">Para quê?
+      <input name="nome" value="{{ campos.nome }}" placeholder="Ex: Viagem para o Nordeste" maxlength="40" required>
+    </label>
+    <div class="campos-lado-a-lado">
+      <label class="campo">Quanto juntar
+        <input name="alvo" value="{{ campos.alvo }}" inputmode="decimal" placeholder="Ex: 5.000" required>
+      </label>
+      <label class="campo">Até quando (opcional)
+        <input type="month" name="prazo" value="{{ campos.prazo }}" min="{{ mes_minimo }}">
+      </label>
+    </div>
+    <button class="botao botao-largo" type="submit">Criar meta</button>
+  </form>
+{% endblock %}

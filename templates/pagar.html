@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
+
+{% block titulo %}Contas a pagar{% endblock %}
+{% block topo %}{{ topo("Contas a pagar", url_for('mais'), "Mais") }}{% endblock %}
+
+{% block conteudo %}
+  <p class="introducao">
+    Despesas lançadas com "Ainda não paguei". Elas só entram no saldo atual quando você toca em Paguei,
+    e a data passa a ser a do pagamento.
+  </p>
+  {% if itens %}
+    <div class="lista">
+      {% for item in itens %}
+        <div class="conta-a-pagar{{ ' atrasada' if item.atrasado }}">
+          <span class="icone" style="--cor: {{ item.cor }}" aria-hidden="true">{{ item.icone }}</span>
+          <a class="item-texto" href="{{ url_for('editar', indice=item.indice, c=item.chave, voltar=item.l.data[:7]) }}">
+            <span class="descricao">{{ item.l.descricao }}</span>
+            <span class="meta"><span class="vencimento">{{ quando_vence(item.l.data) }}</span><span>{{ item.l.categoria }}</span></span>
+          </a>
+          <span class="valor despesa">{{ formatar_reais(item.l.valor) }}</span>
+          <form method="post" action="{{ url_for('marcar_como_pago', indice=item.indice) }}">
+            <input type="hidden" name="c" value="{{ item.chave }}">
+            <input type="hidden" name="de" value="pagar">
+            <button class="botao-pequeno" type="submit">Paguei</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="vazio">Nenhuma conta esperando pagamento.</p>
+  {% endif %}
+  <a class="botao secundario botao-largo" href="{{ url_for('novo', tipo='despesa', pendente='1') }}">Lançar uma conta a pagar</a>
+{% endblock %}

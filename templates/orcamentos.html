@@ -1,25 +1,30 @@
 {% extends "base.html" %}
+{% from "_macros.html" import topo with context %}
 
-{% block topo %}
-  <a class="voltar" href="{{ url_for('inicio') }}">‹ Início</a>
-  <h1>Orçamentos</h1>
-  <span class="espaco"></span>
-{% endblock %}
+{% block titulo %}Orçamentos{% endblock %}
+{% block topo %}{{ topo("Orçamentos", url_for('inicio'), "Início") }}{% endblock %}
 
 {% block conteudo %}
+  <p class="introducao">
+    Quanto você quer gastar no máximo, por mês, em cada categoria. Deixe vazio para não ter limite.
+    A barra fica ocre a partir de 80% e vermelha quando estoura.
+  </p>
   {% if erros %}<div class="aviso aviso-erro" role="alert">Confira os valores marcados abaixo.</div>{% endif %}
-  <form class="cartao" method="post">
-    <p class="suave pequeno" style="margin-top: 0">
-      Quanto você quer gastar no máximo, por mês, em cada categoria.
-      Deixe vazio para não ter limite. A barra fica laranja a partir de 80% e vermelha quando estoura.
-    </p>
-    {% for categoria, texto in campos.items() %}
-      <label class="campo">{{ categoria }}
-        <input name="{{ categoria }}" value="{{ texto }}" inputmode="decimal" placeholder="Sem limite"
-               autocomplete="off">
-        {% if categoria in erros %}<span class="erro-campo">{{ erros[categoria] }}</span>{% endif %}
-      </label>
-    {% endfor %}
-    <button class="botao" type="submit">Salvar orçamentos</button>
+  <form class="formulario" method="post">
+    <div class="lista">
+      {% for categoria, texto in campos.items() %}
+        <label class="orcamento-linha{{ ' com-erro' if categoria in erros }}">
+          <span class="icone" aria-hidden="true">{{ icones[categoria] }}</span>
+          <span class="descricao">{{ categoria }}</span>
+          <span class="orcamento-campo">
+            <span aria-hidden="true">R$</span>
+            <input name="{{ categoria }}" value="{{ texto }}" inputmode="decimal" placeholder="Sem limite"
+                   autocomplete="off" aria-label="Limite de {{ categoria }}">
+          </span>
+          {% if categoria in erros %}<span class="erro-campo">{{ erros[categoria] }}</span>{% endif %}
+        </label>
+      {% endfor %}
+    </div>
+    <button class="botao botao-largo" type="submit">Salvar orçamentos</button>
   </form>
 {% endblock %}

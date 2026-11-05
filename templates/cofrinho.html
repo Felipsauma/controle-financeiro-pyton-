@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topo, dinheiro with context %}
+
+{% block titulo %}Cofrinho{% endblock %}
+{% block classe %}pagina-larga{% endblock %}
+{% block topo %}{{ topo("Cofrinho", url_for('mais'), "Mais") }}{% endblock %}
+
+{% block conteudo %}
+<div class="cofrinho">
+  <div class="cofrinho-principal">
+    {# O total aparece numa moeda de R$ 1: aro dourado, miolo prateado #}
+    <section class="moeda" aria-labelledby="titulo-cofrinho">
+      <div class="moeda-miolo">
+        <h2 id="titulo-cofrinho" class="moeda-rotulo">No cofrinho</h2>
+        <p class="moeda-valor">{{ dinheiro(saldo) }}</p>
+      </div>
+    </section>
+    <dl class="cofrinho-numeros">
+      <div>
+        <dt>Este mês</dt>
+        <dd class="{{ 'receita' if este_mes > 0 else ('despesa' if este_mes < 0 else '') }}">
+          {{ ("+ " if este_mes > 0 else ("− " if este_mes < 0 else "")) ~ formatar_reais(este_mes|abs) }}
+        </dd>
+      </div>
+      <div>
+        <dt>Nas metas</dt>
+        <dd><a href="{{ url_for('metas') }}">{{ formatar_reais(nas_metas) }}</a></dd>
+      </div>
+    </dl>
+
+    <form class="formulario painel" method="post">
+      <h2>Guardar ou retirar</h2>
+      {% if erro %}<div class="aviso aviso-erro" role="alert">{{ erro }}</div>{% endif %}
+      <label class="valor-campo">
+        <span class="sr">Valor em reais</span>
+        <span class="valor-moeda" aria-hidden="true">R$</span>
+        <input class="valor-grande" name="valor" value="{{ campos.valor }}" inputmode="decimal"
+               placeholder="0,00" autocomplete="off" required>
+      </label>
+      <label class="campo">Descrição (opcional)
+        <input name="descricao" value="{{ campos.descricao }}" placeholder="Ex: Sobra do mês, 13º salário"
+               maxlength="60" autocomplete="off">
+      </label>
+      <div class="cofrinho-botoes">
+        <button class="botao receita" type="submit" name="acao" value="guardar">Guardar</button>
+        <button class="botao secundario" type="submit" name="acao" value="retirar">Retirar</button>
+      </div>
+      <p class="ajuda">
+        O cofrinho não muda o saldo: ele mostra quanto do seu dinheiro está separado.
+        Na página inicial aparece quanto sobra livre para gastar.
+      </p>
+    </form>
+  </div>
+
+  <section class="cofrinho-historico" aria-labelledby="titulo-historico">
+    <h2 id="titulo-historico">Histórico</h2>
+    {% if movimentos %}
+      <div class="lista">
+        {% for m in movimentos %}
+          <div class="item movimento">
+            <span class="icone" style="--cor: {{ 'var(--verde)' if m.valor > 0 else 'var(--ocre)' }}" aria-hidden="true">
+              {{ "🪙" if m.valor > 0 else "↩️" }}
+            </span>
+            <span class="item-texto">
+              <span class="descricao">{{ m.descricao }}</span>
+              <span class="meta"><span>{{ rotulo_dia(m.data) }}</span><span>{{ "guardado" if m.valor > 0 else "retirado" }}</span></span>
+            </span>
+            <span class="valor {{ 'receita' if m.valor > 0 else 'despesa' }}">
+              {{ "+" if m.valor > 0 else "−" }} {{ formatar_reais(m.valor|abs) }}
+            </span>
+            <form method="post" action="{{ url_for('apagar_movimento', identificador=m.id) }}"
+                  onsubmit="return confirm('Apagar este movimento do histórico?')">
+              <button class="botao-texto" type="submit" aria-label="Apagar {{ m.descricao }}" title="Apagar do histórico">✕</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="vazio">Nada guardado ainda. Digite um valor e toque em Guardar para começar.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

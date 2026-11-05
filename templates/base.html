@@ -7,19 +7,57 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Gastos">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#f3f5f9" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#edf0eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141b21" media="(prefers-color-scheme: dark)">
   <meta name="format-detection" content="telephone=no">
+  <link rel="icon" href="{{ url_for('icone') }}">
   <link rel="apple-touch-icon" href="{{ url_for('icone') }}">
   <link rel="manifest" href="{{ url_for('manifesto') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
   <title>{% block titulo %}Controle de Gastos{% endblock %}</title>
 </head>
-<body>
+<body class="{% block classe %}{% endblock %}">
+  {% if session.entrou %}
+    {# Menu lateral: só aparece em telas de computador #}
+    <nav class="lateral" aria-label="Menu">
+      <a class="marca" href="{{ url_for('inicio') }}">
+        <img src="{{ url_for('icone') }}" alt="" width="34" height="34">
+        <span>Controle de Gastos</span>
+      </a>
+      {% set menu = [
+        ("inicio", "🏠", "Início"), ("pagar", "🧾", "Contas a pagar"), ("contas", "💳", "Contas e cartões"),
+        ("cofrinho", "🐷", "Cofrinho"), ("metas", "🎯", "Metas"), ("orcamentos", "📏", "Orçamentos"), ("recorrentes", "🔁", "Recorrentes"),
+        ("categorias", "🏷️", "Categorias"), ("importar", "📥", "Importar extrato"), ("mais", "📊", "Resumo por mês"),
+      ] %}
+      {% for destino, icone, nome in menu %}
+        <a class="lateral-item{{ ' ativo' if request.endpoint == destino or (destino == 'contas' and request.endpoint == 'conta') }}"
+           href="{{ url_for(destino) }}"{{ ' aria-current="page"'|safe if request.endpoint == destino }}>
+          <span aria-hidden="true">{{ icone }}</span>{{ nome }}
+        </a>
+      {% endfor %}
+      <a class="lateral-item" href="{{ url_for('exportar', mes='todos') }}"><span aria-hidden="true">📤</span>Exportar para o Excel</a>
+      <form class="lateral-sair" method="post" action="{{ url_for('sair') }}">
+        <button class="botao-texto" type="submit">Sair</button>
+      </form>
+    </nav>
+  {% endif %}
   <header class="topo">{% block topo %}{% endblock %}</header>
   <main>
     {% for tipo, texto in get_flashed_messages(with_categories=true) %}
-      <div class="aviso aviso-{{ tipo }}" role="status">{{ texto }}</div>
+      {% if tipo == "desfazer" %}
+        <div class="aviso aviso-ok aviso-com-botao" role="status">
+          <span>{{ texto }}</span>
+          <form method="post" action="{{ url_for('desfazer') }}">
+            <input type="hidden" name="voltar" value="{{ request.args.get('mes', '') }}">
+            <button class="botao-texto" type="submit">Desfazer</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="aviso aviso-{{ tipo }}" role="status">{{ texto }}</div>
+      {% endif %}
     {% endfor %}
     {% block conteudo %}{% endblock %}
   </main>
