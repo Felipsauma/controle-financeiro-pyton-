@@ -123,9 +123,12 @@ PORTA = 5000
 # Senha (só o resumo) e chave das sessões, para não pedir a senha a cada vez
 ARQUIVO_CONFIG = Path(__file__).parent / "config-web.json"
 
-# Cores das categorias, tiradas das cédulas do Real (R$ 100, 50, 5, 2, 20, 200...).
-# O vermelho (R$ 10) e o verde ficam de fora: são as cores de despesa e receita.
-CORES_CATEGORIAS = ["#2b5f8a", "#b07a25", "#6e5491", "#4e7585", "#c99a2e", "#8a6f5a", "#6b7f3a"]
+# Cores das categorias: seis tons fixos, um por posição da categoria na lista.
+# Os valores ficam no estilo.css (--cat-1 a --cat-6, com uma versão para o modo
+# escuro) e foram conferidos para quem não distingue bem as cores. O vermelho
+# e o verde ficam de fora: são as cores de despesa e receita. Da sétima
+# categoria em diante a cor é o cinza de "outras": repetir um tom confundiria.
+CORES_CATEGORIAS = 6
 
 DIAS_DA_SEMANA = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
 
@@ -165,14 +168,21 @@ def salvar_config(config, arquivo=ARQUIVO_CONFIG):
     Path(arquivo).write_text(json.dumps(config, indent=2), encoding="utf-8")
 
 
+def posicao_da_cor(categoria, categorias):
+    """1 a 6 para as seis primeiras categorias; 0 para as outras."""
+    if categoria in categorias and categorias.index(categoria) < CORES_CATEGORIAS:
+        return categorias.index(categoria) + 1
+    return 0
+
+
 def cor_da_categoria(categoria, categorias):
-    if categoria in categorias:
-        return CORES_CATEGORIAS[categorias.index(categoria) % len(CORES_CATEGORIAS)]
-    return CORES_CATEGORIAS[-1]
+    posicao = posicao_da_cor(categoria, categorias)
+    return f"var(--cat-{posicao})" if posicao else "var(--cat-outras)"
 
 
 def formatar_saldo(valor):
     """Saldo com o sinal de menos tipográfico (fica mais bonito na tela)."""
+    valor = round(valor, 2)  # -0,000001 é zero, não "− R$ 0,00"
     return f"− {formatar_reais(-valor)}" if valor < 0 else formatar_reais(valor)
 
 
@@ -297,24 +307,37 @@ def barras_das_categorias(dados, lancamentos_do_mes, mes, lancamentos_do_anterio
     return barras
 
 
-def rosca(barras):
-    """Fatias do gráfico de rosca (em % da volta), a partir das barras das categorias.
+def fatia_de_pizza(inicio, tamanho, centro=21, raio=20):
+    """O desenho (caminho SVG) de uma fatia que começa em 'inicio' % da volta e
+    ocupa 'tamanho' %. A volta começa no alto e segue no sentido do relógio."""
+    if tamanho >= 99.999:
+        return f"M {centro} {centro - raio} A {raio} {raio} 0 1 1 {centro - 0.001} {centro - raio} Z"
 
-    O círculo do SVG tem circunferência 100, então o tamanho de cada fatia em %
-    é direto o comprimento do traço.
-    """
-    total = sum(b["gasto"] for b in barras)
-    fatias, inicio = [], 0.0
-    for b in barras:
-        if not b["gasto"]:
-            continue
-        tamanho = b["gasto"] / total * 100
-        # Um vãozinho entre as fatias, menos quando só há uma
-        traco = max(tamanho - 0.8, 0.3) if tamanho < 100 else 100
-        fatias.append({"cor": b["cor"], "nome": b["nome"], "traco": round(traco, 3),
-                       "resto": round(100 - traco, 3), "deslocamento": round(25 - inicio, 3)})
-        inicio += tamanho
-    return fatias
+    def ponto(porcentagem):
+        angulo = math.radians(porcentagem * 3.6 - 90)
+        return f"{centro + raio * math.cos(angulo):.3f} {centro + raio * math.sin(angulo):.3f}"
+
+    volta_grande = 1 if tamanho > 50 else 0
+    return (f"M {centro} {centro} L {ponto(inicio)} "
+            f"A {raio} {raio} 0 {volta_grande} 1 {ponto(inicio + tamanho)} Z")
+
+
+def rosca(totais):
+    """O gráfico de pizza: o círculo inteiro é a receita do período, com o que
+    foi gasto em vermelho e o que sobrou em verde. Quando as despesas passam
+    da receita, o círculo inteiro fica vermelho. (O detalhe por categoria fica
+    na lista logo abaixo do gráfico.)"""
+    receita, despesa = totais["receita"], totais["despesa"]
+    base = max(receita, despesa)
+    if not base:
+        return None
+    # Em centavos, para a sobra de 0,30 - 0,10 - 0,20 dar zero e não "faltou R$ 0,00"
+    sobra = round(receita - despesa, 2)
+    parte_gasta = despesa / base * 100
+    return {"receita": receita, "despesa": despesa, "sobra": sobra,
+            "parte_gasta": parte_gasta, "parte_da_sobra": 100 - parte_gasta if sobra > 0 else 0,
+            "caminho_gasto": fatia_de_pizza(0, parte_gasta) if despesa else None,
+            "caminho_da_sobra": fatia_de_pizza(parte_gasta, 100 - parte_gasta) if sobra > 0 else None}
 
 
 def evolucao(lancamentos, fim):
@@ -582,7 +605,7 @@ def criar_app(senha, arquivo=None, chave=None):
             variacao_despesas=variacao(totais["despesa"], totais_por_tipo(do_anterior)["despesa"])
             if mes else None,
             barras=barras,
-            fatias=rosca(barras),
+            rosca=rosca(totais),
             evolucao=evolucao(lancamentos, mes or mes_atual()),
             itens=itens_da_lista(dados, filtrar(lancamentos, mes=mes, busca=busca)),
             a_pagar=itens_da_lista(dados, a_pagar[:5]),

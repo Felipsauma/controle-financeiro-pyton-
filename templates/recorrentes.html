@@ -10,14 +10,14 @@
     "Repetir todo mês" ao lançar.
   </p>
   {% if recorrentes %}
-    <div class="lista">
+    <div class="lista livro">
       {% for r in recorrentes %}
         <div class="item">
-          <span class="icone" aria-hidden="true">{{ icones[r.id] }}</span>
+          <span class="data"><span><span class="pequeno">dia</span> <b>{{ "%02d"|format(r.dia) }}</b></span></span>
           <span class="item-texto">
             <span class="descricao">{{ r.descricao }}</span>
             <span class="meta">
-              <span>Todo dia {{ r.dia }}</span><span>{{ r.categoria }}</span>
+              <span>{{ r.categoria }}, todo mês</span>
               {%- if r.pendente %}<span class="etiqueta etiqueta-alerta">conta a pagar</span>{% endif %}
             </span>
           </span>

@@ -7,8 +7,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Gastos">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#edf0eb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#141b21" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#eef2ea" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131916" media="(prefers-color-scheme: dark)">
   <meta name="format-detection" content="telephone=no">
   <link rel="icon" href="{{ url_for('icone') }}">
   <link rel="apple-touch-icon" href="{{ url_for('icone') }}">
@@ -24,21 +24,24 @@
     {# Menu lateral: só aparece em telas de computador #}
     <nav class="lateral" aria-label="Menu">
       <a class="marca" href="{{ url_for('inicio') }}">
-        <img src="{{ url_for('icone') }}" alt="" width="34" height="34">
+        <img src="{{ url_for('icone') }}" alt="" width="28" height="28">
         <span>Controle de Gastos</span>
       </a>
+      {# Em grupos, como no "Mais" do celular #}
       {% set menu = [
-        ("inicio", "🏠", "Início"), ("pagar", "🧾", "Contas a pagar"), ("contas", "💳", "Contas e cartões"),
-        ("cofrinho", "🐷", "Cofrinho"), ("metas", "🎯", "Metas"), ("orcamentos", "📏", "Orçamentos"), ("recorrentes", "🔁", "Recorrentes"),
-        ("categorias", "🏷️", "Categorias"), ("importar", "📥", "Importar extrato"), ("mais", "📊", "Resumo por mês"),
+        [("inicio", "Início"), ("pagar", "Contas a pagar"), ("contas", "Contas e cartões")],
+        [("cofrinho", "Cofrinho"), ("metas", "Metas"), ("orcamentos", "Orçamentos"), ("recorrentes", "Recorrentes")],
+        [("categorias", "Categorias"), ("importar", "Importar extrato"), ("mais", "Resumo por mês")],
       ] %}
-      {% for destino, icone, nome in menu %}
-        <a class="lateral-item{{ ' ativo' if request.endpoint == destino or (destino == 'contas' and request.endpoint == 'conta') }}"
-           href="{{ url_for(destino) }}"{{ ' aria-current="page"'|safe if request.endpoint == destino }}>
-          <span aria-hidden="true">{{ icone }}</span>{{ nome }}
-        </a>
+      {% for grupo in menu %}
+        <div class="lateral-grupo">
+          {% for destino, nome in grupo %}
+            <a class="lateral-item{{ ' ativo' if request.endpoint == destino or (destino == 'contas' and request.endpoint == 'conta') }}"
+               href="{{ url_for(destino) }}"{{ ' aria-current="page"'|safe if request.endpoint == destino }}>{{ nome }}</a>
+          {% endfor %}
+        </div>
       {% endfor %}
-      <a class="lateral-item" href="{{ url_for('exportar', mes='todos') }}"><span aria-hidden="true">📤</span>Exportar para o Excel</a>
+      <a class="lateral-item" href="{{ url_for('exportar', mes='todos') }}">Exportar para o Excel</a>
       <form class="lateral-sair" method="post" action="{{ url_for('sair') }}">
         <button class="botao-texto" type="submit">Sair</button>
       </form>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import topo with context %}
+{% from "_macros.html" import topo, data_livro, categoria with context %}
 
 {% block titulo %}Contas a pagar{% endblock %}
 {% block topo %}{{ topo("Contas a pagar", url_for('mais'), "Mais") }}{% endblock %}
@@ -10,13 +10,13 @@
     e a data passa a ser a do pagamento.
   </p>
   {% if itens %}
-    <div class="lista">
+    <div class="lista livro">
       {% for item in itens %}
         <div class="conta-a-pagar{{ ' atrasada' if item.atrasado }}">
-          <span class="icone" style="--cor: {{ item.cor }}" aria-hidden="true">{{ item.icone }}</span>
+          {{ data_livro(item.l.data) }}
           <a class="item-texto" href="{{ url_for('editar', indice=item.indice, c=item.chave, voltar=item.l.data[:7]) }}">
             <span class="descricao">{{ item.l.descricao }}</span>
-            <span class="meta"><span class="vencimento">{{ quando_vence(item.l.data) }}</span><span>{{ item.l.categoria }}</span></span>
+            <span class="meta"><span class="vencimento">{{ quando_vence(item.l.data) }}</span>{{ categoria(item.l.categoria, item.cor) }}</span>
           </a>
           <span class="valor despesa">{{ formatar_reais(item.l.valor) }}</span>
           <form method="post" action="{{ url_for('marcar_como_pago', indice=item.indice) }}">

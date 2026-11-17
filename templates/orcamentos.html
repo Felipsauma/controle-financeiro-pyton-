@@ -14,7 +14,6 @@
     <div class="lista">
       {% for categoria, texto in campos.items() %}
         <label class="orcamento-linha{{ ' com-erro' if categoria in erros }}">
-          <span class="icone" aria-hidden="true">{{ icones[categoria] }}</span>
           <span class="descricao">{{ categoria }}</span>
           <span class="orcamento-campo">
             <span aria-hidden="true">R$</span>

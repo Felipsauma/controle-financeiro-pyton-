@@ -461,6 +461,7 @@ def validar_mes(texto):
 
 def formatar_reais(valor):
     """Formata 1234.5 como 'R$ 1.234,50' (padrão brasileiro)."""
+    valor = round(valor, 2) + 0.0  # o "+ 0.0" tira o sinal de -0.0 ("R$ -0,00")
     texto = f"{valor:,.2f}"  # 1,234.50
     texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {texto}"
@@ -468,6 +469,7 @@ def formatar_reais(valor):
 
 def formatar_saldo(valor):
     """Como formatar_reais, mas com sinal quando negativo: '- R$ 50,00'."""
+    valor = round(valor, 2)  # -0,000001 é zero, não "- R$ 0,00"
     return f"- {formatar_reais(-valor)}" if valor < 0 else formatar_reais(valor)
 
 

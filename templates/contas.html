@@ -10,7 +10,6 @@
       {% for item in lista %}
         {% set c = item.conta %}
         <a class="item" href="{{ url_for('conta', identificador=c.id) }}">
-          <span class="icone icone-cartao" aria-hidden="true">{{ "💳" if c.tipo == "cartao" else ("💵" if c.tipo == "dinheiro" else "🏦") }}</span>
           <span class="item-texto">
             <span class="descricao">{{ c.nome }}</span>
             <span class="meta">

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import topo, dinheiro with context %}
+{% from "_macros.html" import topo, dinheiro, data_livro with context %}
 
 {% block titulo %}Cofrinho{% endblock %}
 {% block classe %}pagina-larga{% endblock %}
@@ -55,15 +55,13 @@
   <section class="cofrinho-historico" aria-labelledby="titulo-historico">
     <h2 id="titulo-historico">Histórico</h2>
     {% if movimentos %}
-      <div class="lista">
+      <div class="lista livro">
         {% for m in movimentos %}
           <div class="item movimento">
-            <span class="icone" style="--cor: {{ 'var(--verde)' if m.valor > 0 else 'var(--ocre)' }}" aria-hidden="true">
-              {{ "🪙" if m.valor > 0 else "↩️" }}
-            </span>
+            {{ data_livro(m.data) }}
             <span class="item-texto">
               <span class="descricao">{{ m.descricao }}</span>
-              <span class="meta"><span>{{ rotulo_dia(m.data) }}</span><span>{{ "guardado" if m.valor > 0 else "retirado" }}</span></span>
+              <span class="meta"><span>{{ "guardado" if m.valor > 0 else "retirado" }}</span></span>
             </span>
             <span class="valor {{ 'receita' if m.valor > 0 else 'despesa' }}">
               {{ "+" if m.valor > 0 else "−" }} {{ formatar_reais(m.valor|abs) }}
